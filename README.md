@@ -6,6 +6,7 @@ This repo is a template for prebid.js adapters that would like to use external J
 
 ```
 ├── README.md
+├── LICENSE                - License that governs the external source code
 ├── build                  - build related artifacts
 ├── dist                   - checked in build files
 │   ├── 0.0.1              - semantic versioned folder
