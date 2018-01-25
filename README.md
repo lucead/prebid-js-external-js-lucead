@@ -1,6 +1,6 @@
 # prebid-js-external-js-template
 
-This repo is a template for prebid.js adapters that would like to use external JavaScript.
+This repo is a template for prebid.js adapters that would like to use external JavaScript in their Prebid.js Adapters. See Policy below for details. 
 
 ## Repo structure:
 
@@ -19,18 +19,20 @@ This repo is a template for prebid.js adapters that would like to use external J
 
 ## Instructions
 
- 1. Upload your code into the `/src` directly as required
+ 1. Request that a prebid.org core team member clone this repo into a separate company specific repo such as `prebid-js-external-js-company_name`
+ 1. Once granted access to the new repo, upload your external JS source code into the `/src`
  1. Add your build related items into the `/build` folder so that your source files can be built unto minified and unminified prod files
  1. Check in your built files under `/dist/[version]/prod.js` and `/dist/[version]/prod.min.js` and also at `/dist/prod.min.js` to indicate which file is currently prod.
  1. Use a git tag matching your semvar version @ `/dist/prod.min.js` so that jsdelivr can point to a specific version. 
  1. Update your `LICENSE` file as necessary
+ 1. Publish your CDN file using https://www.jsdelivr.com or alternatively a Prebid.org approved vendor. If using jsdelivr (preferred), files are automatically published via convention at `https://cdn.jsdelivr.net/gh/<org>/<project>@<semvar>/<file_path>`. 
 
 ## Policy
 
 Prebid.js adapter policy states no external javascript is allowed (see [this link](http://prebid.org/dev-docs/bidder-adaptor.html#bidder-adaptor-Required-Adapter-Conventions) ). The following policy provides an exception to this rule if the conventions below are followed:
 
 1. Prebid.org creates a public Github repository with no license distribution constraints for external libraries. All code there is proprietary, with the committer being the IP owner.
-1. This repo, while owned by the Prebid Org, will provide full admin access to the commiters
+1. This repo, while owned by the Prebid.org, will provide full admin access to the commiters
 1. The production URL that is commited inside the Prebid.js adapter needs to be hosted by https://www.jsdelivr.com or by a Prebid.org approved vendor
     1. Prebid.org approved vendors must support the following:
         1. Local presence in major regions including: North and South America, EU, APAC.
