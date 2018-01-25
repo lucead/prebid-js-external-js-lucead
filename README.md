@@ -22,7 +22,7 @@ This repo is a template for prebid.js adapters that would like to use external J
 
  1. Request that a prebid.org core team member clone this repo into a separate company specific repo such as `prebid-js-external-js-company_name`.
  1. Once granted access to the new repo, upload your external JS source code into the `/src`.
- 1. Add your build related items into the `/build` folder so that your source files can be built unto minified and unminified prod files.
+ 1. Add your build related items into the `/build` folder so that your source files can be built into minified and unminified prod files.
  1. Check in your built files under `/dist/[version]/prod.js` and `/dist/[version]/prod.min.js` and also at `/dist/prod.min.js` to indicate which file is currently prod.
  1. Use a git tag matching your semvar version @ `/dist/prod.min.js` so that jsdelivr can point to a specific version. 
  1. Update your `LICENSE` file as necessary.
