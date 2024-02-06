@@ -1,0 +1,17 @@
+{
+  "name": "prebid-js-external-js-lucead",
+  "module": "src/code.js",
+  "type": "module",
+    "scripts": {
+        "build": "esbuild ./src/code.js --bundle --minify --sourcemap --outfile=dist/prod.js"
+    },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "esbuild": "^0.20.0"
+  }
+}
