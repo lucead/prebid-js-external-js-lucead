@@ -32,7 +32,7 @@ export function add_origin_trial()
 		meta.httpEquiv='origin-trial';
 		meta.content=token;
 		document.head.appendChild(meta);
-		log('origin trial added',decode_token(token));
+		log('Origin trial added',decode_token(token));
 	}
 }
 

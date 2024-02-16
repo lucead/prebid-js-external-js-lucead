@@ -1,4 +1,4 @@
-# prebid-js-external-js-template
+# prebid-js-external-js-lucead
 
 This repo is a template for prebid.js adapters that would like to use external JavaScript in their Prebid.js Adapters. See Policy below for details. 
 
@@ -10,7 +10,6 @@ This repo is a template for prebid.js adapters that would like to use external J
 ├── build                  - build related artifacts
 ├── dist                   - checked-in build files
 │   ├── 0.0.1              - semantic versioned folder
-│   │   ├── prod.js        - unminified build file
 │   │   └── prod.min.js    - minified build file
 │   └── prod.min.js        - minified current prod code
 │   ├── prod.js            - unminified current prod code
