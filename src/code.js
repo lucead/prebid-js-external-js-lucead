@@ -12,7 +12,7 @@ import {add_origin_trial,log} from './ayads.js';
 
 add_origin_trial();
 
-const ssp_timeout=1000; // in ms
+const ssp_timeout=500; // in ms
 
 async function fetchWithTimeout(resource,options={})
 {
@@ -25,8 +25,8 @@ async function fetchWithTimeout(resource,options={})
 		...options,
 		signal:controller.signal,
 	});
-	clearTimeout(id);
 
+	clearTimeout(id);
 	return response;
 }
 
@@ -117,7 +117,7 @@ async function get_pa_bid({base_url,size,placement_id,bidRequest,bidderRequest})
 	else
 		selected_ad=await navigator.runAdAuction(auctionConfig);
 
-	log('Protected audience ad',selected_ad);
+	log('Protected audience ad',placement_id,selected_ad);
 
 	if(selected_ad)
 	{
@@ -264,13 +264,12 @@ async function ayads_prebid(data)
 
 			if(bids===null)
 				return empty_response;
-			log('Bids',bids);
 			bids=bids.filter(b=>b && b.cpm);
 
 			if(bids.length && !bids[0]?.is_pa)
 				bids.sort((a,b)=>(b?.cpm || 0)-(a?.cpm || 0));
 
-
+			log('Bids',bids);
 
 			if(bids.length && bids[0]?.cpm>0.)
 			{
@@ -284,7 +283,7 @@ async function ayads_prebid(data)
 		}
 		catch(e)
 		{
-				console.error(e);
+			console.error(e);
 			return empty_response;
 		}
 	}));
