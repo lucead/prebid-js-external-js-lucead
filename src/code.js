@@ -8,12 +8,10 @@
  * https://www.sanook.com/
  */
 
-import {log} from './ayads.js';
+import {log,error} from './ayads.js';
 
-//add_origin_trial();
-const version='v04.02.2';
+const version='v04.02.3';
 const fetch_timeout=1200; //individual fetch timemout
-//const all_responses_timeout=2500; //total timeout to get all bids
 const prerender_pa=false; // to trigger win report
 
 async function fetchWithTimeout(resource,options={})
@@ -322,7 +320,7 @@ async function get_all_responses(data)
 		}
 		catch(e)
 		{
-			console.error(e);
+			error(e);
 			return empty_response;
 		}
 	}));
@@ -346,7 +344,7 @@ async function ayads_prebid(data)
 	}
 	catch(e)
 	{
-		console.error(e);
+		error(e);
 	}
 
 	performance.mark('lucead-end');
@@ -357,7 +355,7 @@ async function ayads_prebid(data)
 		method:'POST',
 		contentType:'text/plain',
 		body:JSON.stringify({request_id,responses}),
-	}).catch(console.error);
+	}).catch(error);
 };
 
 const is_mock=location.hash.includes('mock');
