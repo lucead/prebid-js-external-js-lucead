@@ -1,22 +1,24 @@
 /**
  * Clear cache : https://www.jsdelivr.com/tools/purge
- * URL: https://cdn.jsdelivr.net/gh/lucead/prebid-js-external-js-lucead@master/dist/prod.min.js
+ * https://cdn.jsdelivr.net/gh/lucead/prebid-js-external-js-lucead@master/dist/prod.min.js
+ * https://raw.githubusercontent.com/lucead/prebid-js-external-js-lucead/master/dist/prod.min.js
  *
  * ORTB Docs: https://publisher.docs.themediagrid.com/grid/buyer-ortb-protocol/source.html#source-object
  * https://weqyoua.info/
  * https://www.sanook.com/
- * miltisize, schan
  */
 
-import {add_origin_trial,log} from './ayads.js';
+import {log} from './ayads.js';
 
-add_origin_trial();
-
-const ssp_timeout=500; // in ms
+//add_origin_trial();
+const version='v04.02.2';
+const fetch_timeout=1200; //individual fetch timemout
+//const all_responses_timeout=2500; //total timeout to get all bids
+const prerender_pa=false; // to trigger win report
 
 async function fetchWithTimeout(resource,options={})
 {
-	const {timeout=ssp_timeout}=options;
+	const {timeout=fetch_timeout}=options;
 
 	const controller=new AbortController();
 	const id=setTimeout(()=>controller.abort(),timeout);
@@ -41,6 +43,28 @@ function embed_html(html)
 	return `<html lang="en"><body style="margin:0;background-color:#FFF">${html}</body></html>`;
 }
 
+function get_ortb_data(data,bidRequest)
+{
+	let payload=data.ortbConverter({}).toORTB({bidRequests:[bidRequest],bidderRequest:data.bidderRequest});
+
+	if(data.consent && data.deepSetValue)
+	{
+		data.deepSetValue(payload,'user.ext.consent',data?.consent?.tcString);
+		data.deepSetValue(payload,'regs.ext.gdpr',data?.consent?.gdprApplies ? 1 : 0);
+	}
+
+	if(payload.imp?.length)
+	{
+		for(const imp of payload.imp)
+		{
+			imp.banner.w=bidRequest.sizes[0][0];
+			imp.banner.h=bidRequest.sizes[0][1];
+		}
+	}
+
+	return payload;
+};
+
 function get_seatbid(result,size,ssp=null)
 {
 	if(!result?.seatbid?.length)
@@ -51,6 +75,11 @@ function get_seatbid(result,size,ssp=null)
 
 	let bid=bids[0];
 
+	if(bid?.price)
+	{
+		fetch();
+	}
+
 	return {
 		cpm:bid?.price || 0,
 		currency:'USD',
@@ -60,6 +89,7 @@ function get_seatbid(result,size,ssp=null)
 			height:bid?.h || size.height,
 		},
 		ssp,
+		adomain:bid?.adomain?.length ? bid.adomain[0] : null
 	};
 }
 
@@ -78,9 +108,16 @@ async function get_gdpr()
 	});
 }
 
-async function get_ssp_params(data)
+async function get_placements_info(data)
 {
-	return fetchWithTimeout(`${data.static_url}/placements/ssps_params?ids=`+data.bidRequests.map(r=>r?.params.placementId).join(',')).then(r=>r.json());
+	try
+	{
+		return await fetch(`${data.static_url}/placements/info?ids=`+data.bidRequests.map(r=>r?.params.placementId).join(',')).then(r=>r.json());
+	}
+	catch(e)
+	{
+		return null;
+	}
 }
 
 async function get_pa_bid({base_url,size,placement_id,bidRequest,bidderRequest})
@@ -117,17 +154,19 @@ async function get_pa_bid({base_url,size,placement_id,bidRequest,bidderRequest})
 	else
 		selected_ad=await navigator.runAdAuction(auctionConfig);
 
-	log('Protected audience ad',placement_id,selected_ad);
+	log('PAAPI',placement_id,selected_ad);
 
 	if(selected_ad)
 	{
-		//debugger;
 		//prerender ad to trigger win report
-		const iframe=document.createElement('iframe');//force the request to url, to trigger the report network request
-		iframe.src=selected_ad;
-		iframe.style.display='none';
-		document.body.appendChild(iframe);
-		iframe.remove();
+		if(prerender_pa)
+		{
+			const iframe=document.createElement('iframe');//force the request to url, to trigger the report network request
+			iframe.src=selected_ad;
+			iframe.style.display='none';
+			document.body.appendChild(iframe);
+			iframe.remove();
+		}
 
 		//css to hide iframe scrollbars: iframe{overflow:hidden}
 		return {
@@ -141,15 +180,11 @@ async function get_pa_bid({base_url,size,placement_id,bidRequest,bidderRequest})
 		return null;
 }
 
-async function ayads_prebid(data)
+async function get_all_responses(data)
 {
-	log('Prebid companion',data);
-	const endpoint_url=data.endpoint_url;
-	const request_id=data.request_id;
-	const [ssps_params,consent]=await Promise.all([get_ssp_params(data),get_gdpr()]);
-	data.consent=consent;
+	const placements_info=data.placements_info;
 
-	const responses=await Promise.all(data.bidRequests.map(async bidRequest=>{
+	return await Promise.all(data.bidRequests.map(async bidRequest=>{
 		const empty_response={
 			bid_id:bidRequest.bidId,
 			bid:0,
@@ -171,89 +206,91 @@ async function ayads_prebid(data)
 		{
 			const placement_id=bidRequest?.params?.placementId;
 
-			const get_ortb_data=()=>{
-				let payload=data.ortbConverter({}).toORTB({bidRequests:[bidRequest],bidderRequest:data.bidderRequest});
-
-				if(data.consent && data.deepSetValue)
-				{
-					data.deepSetValue(payload,'user.ext.consent',data?.consent?.tcString);
-					data.deepSetValue(payload,'regs.ext.gdpr',data?.consent?.gdprApplies ? 1 : 0);
-				}
-
-				return payload;
-			};
-
 			if(!placement_id)
 				return empty_response;
 
 			const pa_response=await get_pa_bid({
 				...data,
-				bidRequest,
 				size,
 				placement_id,
+				data,
+				bidRequest,
 			});
 
 			if(pa_response)
 				return pa_response;
 
+
+			if(!placements_info[placement_id]?.ssps)
+			{
+				log('No placement info',placement_id,placements_info);
+				return empty_response;
+			}
+
 			let ssp_responses=[];
 
-			if(ssps_params[placement_id]?.improve)
+			if(placements_info[placement_id]?.ssps?.improve)
 			{
 				ssp_responses.push(get_improve_bid({
 					...data,
 					size,
-					get_ortb_data,
-					placement_id:ssps_params[placement_id].improve,
+					placement_id:placements_info[placement_id]?.ssps?.improve,
+					data,
+					bidRequest,
 				}));
 			}
 
-			if(ssps_params[placement_id]?.grid)
+			if(placements_info[placement_id]?.ssps?.grid)
 			{
 				ssp_responses.push(get_grid_bid({
 					...data,
 					size,
-					get_ortb_data,
-					placement_id:ssps_params[placement_id].grid,
+					placement_id:placements_info[placement_id]?.ssps.grid,
 					deepSetValue:data.deepSetValue,
+					data,
+					bidRequest,
 				}));
 			}
 
-			if(ssps_params[placement_id]?.smart)
+			if(placements_info[placement_id]?.ssps?.smart)
 			{
 				ssp_responses.push(get_smart_bid({
 					...data,
 					sizes:bidRequest.sizes,
 					size,
-					placement_id:ssps_params[placement_id].smart,
+					placement_id:placements_info[placement_id]?.ssps?.smart,
 					transaction_id:bidRequest.transactionId,
 					bid_id:bidRequest.bidId,
 					ad_unit_code:bidRequest.adUnitCode,
 					deepSetValue:data.deepSetValue,
+					data,
+					bidRequest,
 				}));
 			}
 
-			if(ssps_params[placement_id]?.pubmatic)
+			if(placements_info[placement_id]?.ssps?.pubmatic)
 			{
 				ssp_responses.push(get_pubmatic_bid({
 					...data,
 					size,
-					get_ortb_data,
-					placement_id:ssps_params[placement_id].pubmatic,
+					placement_id:placements_info[placement_id]?.ssps?.pubmatic,
 					transaction_id:bidRequest.transactionId,
 					bid_id:bidRequest.bidId,
 					ad_unit_code:bidRequest.adUnitCode,
+					data,
+					bidRequest,
 				}));
 			}
 
-			if(ssps_params[placement_id]?.magnite)
+			if(placements_info[placement_id]?.ssps?.magnite)
 			{
 				ssp_responses.push(get_magnite_bid({
 					...data,
 					size,
-					get_ortb_data,
-					placement_id:ssps_params[placement_id].magnite,
+					placement_id:placements_info[placement_id]?.ssps?.magnite,
 					ad_unit_code:bidRequest.adUnitCode,
+					data,
+					bidRequest,
 				}));
 			}
 
@@ -261,18 +298,20 @@ async function ayads_prebid(data)
 				return empty_response;
 
 			let bids=await Promise.all(ssp_responses);
-
-			if(bids===null)
+			if(bids===null || !bids?.length)
+			{
+				log('No bids',placement_id,bids);
 				return empty_response;
+			}
 			bids=bids.filter(b=>b && b.cpm);
 
-			if(bids.length && !bids[0]?.is_pa)
-				bids.sort((a,b)=>(b?.cpm || 0)-(a?.cpm || 0));
+			log('SSP Bids',placement_id,bids);
 
-			log('Bids',bids);
-
-			if(bids.length && bids[0]?.cpm>0.)
+			if(bids?.length)
 			{
+				if(!bids[0]?.is_pa)
+					bids.sort((a,b)=>(b?.cpm || 0)-(a?.cpm || 0));
+
 				let winner=bids[0];
 				winner.bid_id=bidRequest.bidId;
 				winner.size=size;
@@ -287,8 +326,34 @@ async function ayads_prebid(data)
 			return empty_response;
 		}
 	}));
+}
 
-	fetchWithTimeout(`${endpoint_url}/prebid/pub`,{
+async function ayads_prebid(data)
+{
+	log('Lucead for Prebid '+version,data);
+	const endpoint_url=data.endpoint_url;
+	const request_id=data.request_id;
+	const [placements_info,consent]=await Promise.all([get_placements_info(data),get_gdpr()]);
+	data.consent=consent;
+	data.placements_info=placements_info;
+	performance.mark('lucead-start');
+
+	let responses=null;
+
+	try
+	{
+		responses=await get_all_responses(data);
+	}
+	catch(e)
+	{
+		console.error(e);
+	}
+
+	performance.mark('lucead-end');
+
+	log('All responses',responses,performance.measure('lucead-all-responses','lucead-start','lucead-end'));
+
+	fetch(`${endpoint_url}/prebid/pub`,{
 		method:'POST',
 		contentType:'text/plain',
 		body:JSON.stringify({request_id,responses}),
@@ -298,16 +363,17 @@ async function ayads_prebid(data)
 const is_mock=location.hash.includes('mock');
 
 async function get_improve_bid({
+	data,
+	bidRequest,
 	prebid_version,
 	size,
 	placement_id,
-	get_ortb_data,
 })
 {
 	const endpoint_url=is_mock ?
 		'?mock=improve' :
 		'https://ad.360yield.com/pb';
-	const ortb=get_ortb_data();
+	const ortb=get_ortb_data(data,bidRequest);
 
 	ortb.imp[0].ext.bidder={placementId:placement_id || 22511670};
 	// noinspection JSValidateTypes
@@ -317,6 +383,7 @@ async function get_improve_bid({
 
 	try
 	{
+		performance.mark('lucead-improve-start');
 		let res=await fetchWithTimeout(endpoint_url,{
 			method:'POST',
 			contentType:'text/plain',
@@ -331,6 +398,7 @@ async function get_improve_bid({
 		if(!res?.seatbid[0]?.bid[0]?.price)
 			return null;
 
+		performance.mark('lucead-improve-end');
 		return get_seatbid(res,size,'improve');
 	}
 	catch(e)
@@ -343,15 +411,16 @@ async function get_improve_bid({
 async function get_grid_bid({
 	size,
 	placement_id,
-	get_ortb_data,
 	//deepSetValue,
+	data,
+	bidRequest,
 })
 {
 	const endpoint_url=is_mock ?
 		'?mock=grid' :
 		'https://grid.bidswitch.net/hbjson';
 
-	let payload=get_ortb_data();
+	let payload=get_ortb_data(data,bidRequest);
 	payload.imp[0].tagid=placement_id.toString();
 	//payload.imp[0].banner.format=[{w:size.width||300,h:size.height||250}];
 	/*deepSetValue(payload,'source.ext.shain',{
@@ -380,7 +449,7 @@ async function get_grid_bid({
 			return null;
 		}
 
-		res= await res.json();
+		res=await res.json();
 		return get_seatbid(res,size,'grid');
 	}
 	catch(e)
@@ -389,14 +458,23 @@ async function get_grid_bid({
 	}
 }
 
-async function get_smart_bid({placement_id,sizes,size,prebid_version,transaction_id,bid_id,ad_unit_code,consent})
+async function get_smart_bid({
+	placement_id,
+	sizes,
+	size,
+	prebid_version,
+	transaction_id,
+	bid_id,
+	ad_unit_code,
+	consent,
+})
 {
 	const endpoint_url='https://prg.smartadserver.com/prebid/v1';
 	//const endpoint_url='https://www14.smartadserver.com/prebid/v1';
 	const ids=placement_id.toString().split(':').map(id=>parseInt(id));
 	if(ids.length<3) return null;
 
-	const data={
+	const payload={
 		siteid:ids[0] || 351627,
 		pageid:ids[1] || 1232283,
 		formatid:ids[2] || 88269,
@@ -420,7 +498,7 @@ async function get_smart_bid({placement_id,sizes,size,prebid_version,transaction
 		let res=await fetchWithTimeout(endpoint_url,{
 			method:'POST',
 			contentType:'text/plain',
-			body:JSON.stringify(data),
+			body:JSON.stringify(payload),
 		});
 
 		if(!res.ok || res.status!==200 || res.headers.get('content-length')==='0')
@@ -452,11 +530,12 @@ async function get_smart_bid({placement_id,sizes,size,prebid_version,transaction
 async function get_pubmatic_bid({
 	placement_id,
 	size,
-	get_ortb_data,
+	data,
+	bidRequest,
 })
 {
 	const endpoint_url=is_mock ? '?mock=pubmatic' : 'https://hbopenbid.pubmatic.com/translator?source=prebid-client';
-	let payload=get_ortb_data();
+	let payload=get_ortb_data(data,bidRequest);
 	payload.at=1;
 	payload.cur=['USD','EUR'];
 	payload.imp[0].tagid=placement_id.toString();
@@ -469,13 +548,13 @@ async function get_pubmatic_bid({
 			body:JSON.stringify(payload),
 		});
 
-		if(!res.ok || res.status!==200)
+		if(!res.ok)
 		{
 			log('Response not ok',res);
 			return null;
 		}
 
-		res= await res.json();
+		res=await res.json();
 		return get_seatbid(res,size,'pubmatic');
 	}
 	catch(e)
@@ -488,14 +567,15 @@ async function get_magnite_bid({
 	placement_id,
 	size,
 	ad_unit_code,
-	get_ortb_data,
+	data,
+	bidRequest,
 })
 {
 	const endpoint_url=is_mock ? '?mock=magnite' : 'https://prebid-server.rubiconproject.com/openrtb2/auction';
 	const ids=placement_id.toString().split(':').map(id=>parseInt(id));
 	if(ids.length<3) return null;
-	let data=get_ortb_data();
-	data.imp[0].ext.prebid={
+	let payload=get_ortb_data(data,bidRequest);
+	payload.imp[0].ext.prebid={
 		bidder:{
 			rubicon:{
 				video:{},
@@ -512,13 +592,13 @@ async function get_magnite_bid({
 		let res=await fetchWithTimeout(endpoint_url,{
 			method:'POST',
 			contentType:'text/plain',
-			body:JSON.stringify(data),
+			body:JSON.stringify(payload),
 		});
 
 		if(!res.ok)
 			return null;
 
-		res= await res.json();
+		res=await res.json();
 		return get_seatbid(res,size,'magnite');
 	}
 	catch(e)

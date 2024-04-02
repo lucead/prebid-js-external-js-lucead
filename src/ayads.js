@@ -1,7 +1,11 @@
 export function log()
 {
 	console.log('%c.io','background:#444;color:#fd890d;border-radius:4px;padding:2px',...arguments);
-	//console.log('[Ayads]',...arguments);
+}
+
+export function error()
+{
+	console.error('%c.io','background:#444;color:#fd890d;border-radius:4px;padding:2px',...arguments);
 }
 
 export function process_queue()
