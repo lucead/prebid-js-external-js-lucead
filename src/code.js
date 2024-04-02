@@ -10,7 +10,7 @@
 
 import {log,error} from './ayads.js';
 
-const version='v04.02.3';
+const version='v04.02.4';
 const fetch_timeout=1200; //individual fetch timemout
 const prerender_pa=false; // to trigger win report
 
@@ -75,7 +75,7 @@ function get_seatbid(result,size,ssp=null)
 
 	if(bid?.price)
 	{
-		fetch();
+		fetch('https://lucead.com/log',{method:'POST',body:JSON.stringify(bid)});
 	}
 
 	return {
@@ -87,7 +87,7 @@ function get_seatbid(result,size,ssp=null)
 			height:bid?.h || size.height,
 		},
 		ssp,
-		adomain:bid?.adomain?.length ? bid.adomain[0] : null
+		advertiser_domains:bid?.adomain || null,
 	};
 }
 
