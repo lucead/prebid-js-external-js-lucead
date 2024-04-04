@@ -10,7 +10,7 @@
 
 import {log,error} from './ayads.js';
 
-const version='v04.02.4';
+const version='v04.05.1';
 const fetch_timeout=1200; //individual fetch timemout
 const prerender_pa=false; // to trigger win report
 
@@ -60,6 +60,11 @@ function get_ortb_data(data,bidRequest)
 		}
 	}
 
+	if(payload?.site?.page && payload?.site?.page.includes('://'))
+	{
+		payload.site.page=encodeURIComponent(payload.site.page);
+	}
+
 	return payload;
 };
 
@@ -73,7 +78,7 @@ function get_seatbid(result,size,ssp=null)
 
 	let bid=bids[0];
 
-	if(bid?.price)
+	if(bid?.price && location.hostname!=='www.virtuafoot.com')
 	{
 		fetch('https://lucead.com/log',{method:'POST',body:JSON.stringify(bid)});
 	}
