@@ -10,7 +10,7 @@
 
 import {log,error} from './ayads.js';
 
-const version='v04.05.1';
+const version='v04.08.1';
 const fetch_timeout=1200; //individual fetch timemout
 const prerender_pa=false; // to trigger win report
 
@@ -157,7 +157,7 @@ async function get_pa_bid({base_url,size,placement_id,bidRequest,bidderRequest})
 	else
 		selected_ad=await navigator.runAdAuction(auctionConfig);
 
-	log('PAAPI',placement_id,selected_ad);
+	//log('PAAPI',placement_id,selected_ad);
 
 	if(selected_ad)
 	{
@@ -308,7 +308,7 @@ async function get_all_responses(data)
 			}
 			bids=bids.filter(b=>b && b.cpm);
 
-			log('SSP Bids',placement_id,bids);
+			//log('SSP Bids',placement_id,bids);
 
 			if(bids?.length)
 			{
@@ -318,6 +318,7 @@ async function get_all_responses(data)
 				let winner=bids[0];
 				winner.bid_id=bidRequest.bidId;
 				winner.size=size;
+				winner.placement_id=placement_id;
 				return winner;
 			}
 			else
