@@ -10,7 +10,7 @@
 
 import {log,error} from './ayads.js';
 
-const version='v04.08.1';
+const version='v04.08.2';
 const fetch_timeout=1200; //individual fetch timemout
 const prerender_pa=false; // to trigger win report
 
@@ -63,6 +63,12 @@ function get_ortb_data(data,bidRequest)
 	if(payload?.site?.page && payload?.site?.page.includes('://'))
 	{
 		payload.site.page=encodeURIComponent(payload.site.page);
+	}
+
+	if(!payload?.source?.ext?.wrapper)
+	{
+		data.deepSetValue(payload,'source.ext.wrapper','Prebid_js');
+		data.deepSetValue(payload,'source.ext.wrapper_version',data?.prebid_version || window?.pbjs?.version)
 	}
 
 	return payload;
@@ -303,7 +309,7 @@ async function get_all_responses(data)
 			let bids=await Promise.all(ssp_responses);
 			if(bids===null || !bids?.length)
 			{
-				log('No bids',placement_id,bids);
+				//log('No bids',placement_id,bids);
 				return empty_response;
 			}
 			bids=bids.filter(b=>b && b.cpm);
@@ -334,7 +340,7 @@ async function get_all_responses(data)
 
 async function ayads_prebid(data)
 {
-	log('Lucead for Prebid '+version,data);
+	//log('Lucead for Prebid '+version,data);
 	const endpoint_url=data.endpoint_url;
 	const request_id=data.request_id;
 	const [placements_info,consent]=await Promise.all([get_placements_info(data),get_gdpr()]);
@@ -354,8 +360,7 @@ async function ayads_prebid(data)
 	}
 
 	performance.mark('lucead-end');
-
-	log('All responses',responses,performance.measure('lucead-all-responses','lucead-start','lucead-end'));
+	log(version,responses,performance.measure('lucead-all-responses','lucead-start','lucead-end'));
 
 	fetch(`${endpoint_url}/prebid/pub`,{
 		method:'POST',
