@@ -10,7 +10,7 @@
 
 import {log,error} from './ayads.js';
 
-const version='v04.08.3';
+const version='v04.09.1';
 const fetch_timeout=1200; //individual fetch timemout
 const prerender_pa=false; // to trigger win report
 
@@ -80,7 +80,7 @@ function get_ortb_data(data,bidRequest)
 	return payload;
 };
 
-function get_seatbid(result,size,ssp=null)
+function get_seatbid(result,size,ssp=null,placement_id=null)
 {
 	if(!result?.seatbid?.length)
 		return null;
@@ -92,12 +92,18 @@ function get_seatbid(result,size,ssp=null)
 
 	if(bid?.price && location.hostname!=='www.virtuafoot.com')
 	{
-		fetch('https://lucead.com/log',{method:'POST',body:JSON.stringify(bid)});
+		fetch(`https://lucead.com/log`,{method:'POST',body:JSON.stringify({
+				bid,
+				result,
+				ssp,
+				version,
+				placement_id,
+			})});
 	}
 
 	return {
 		cpm:bid?.price || 0,
-		currency:'USD',
+		currency:result.cur||'USD',
 		ad:embed_html(bid?.adm || null),
 		size:{
 			width:bid?.w || size.width,
@@ -235,8 +241,9 @@ async function get_all_responses(data)
 			if(pa_response)
 				return pa_response;
 
+			const placement=placements_info[placement_id]||null;
 
-			if(!placements_info[placement_id]?.ssps)
+			if(!placement?.ssps)
 			{
 				log('No placement info',placement_id,placements_info);
 				return empty_response;
@@ -244,36 +251,36 @@ async function get_all_responses(data)
 
 			let ssp_responses=[];
 
-			if(placements_info[placement_id]?.ssps?.improve)
+			if(placement?.ssps?.improve)
 			{
 				ssp_responses.push(get_improve_bid({
 					...data,
 					size,
-					placement_id:placements_info[placement_id]?.ssps?.improve,
+					placement_id:placement?.ssps?.improve,
 					data,
 					bidRequest,
 				}));
 			}
 
-			if(placements_info[placement_id]?.ssps?.grid)
+			if(placement?.ssps?.grid)
 			{
 				ssp_responses.push(get_grid_bid({
 					...data,
 					size,
-					placement_id:placements_info[placement_id]?.ssps.grid,
+					placement_id:placement?.ssps.grid,
 					deepSetValue:data.deepSetValue,
 					data,
 					bidRequest,
 				}));
 			}
 
-			if(placements_info[placement_id]?.ssps?.smart)
+			if(placement?.ssps?.smart)
 			{
 				ssp_responses.push(get_smart_bid({
 					...data,
 					sizes:bidRequest.sizes,
 					size,
-					placement_id:placements_info[placement_id]?.ssps?.smart,
+					placement_id:placement?.ssps?.smart,
 					transaction_id:bidRequest.transactionId,
 					bid_id:bidRequest.bidId,
 					ad_unit_code:bidRequest.adUnitCode,
@@ -283,12 +290,12 @@ async function get_all_responses(data)
 				}));
 			}
 
-			if(placements_info[placement_id]?.ssps?.pubmatic)
+			if(placement?.ssps?.pubmatic)
 			{
 				ssp_responses.push(get_pubmatic_bid({
 					...data,
 					size,
-					placement_id:placements_info[placement_id]?.ssps?.pubmatic,
+					placement_id:placement?.ssps?.pubmatic,
 					transaction_id:bidRequest.transactionId,
 					bid_id:bidRequest.bidId,
 					ad_unit_code:bidRequest.adUnitCode,
@@ -297,15 +304,16 @@ async function get_all_responses(data)
 				}));
 			}
 
-			if(placements_info[placement_id]?.ssps?.magnite)
+			if(placement?.ssps?.magnite)
 			{
 				ssp_responses.push(get_magnite_bid({
 					...data,
 					size,
-					placement_id:placements_info[placement_id]?.ssps?.magnite,
+					placement_id:placement?.ssps?.magnite,
 					ad_unit_code:bidRequest.adUnitCode,
 					data,
 					bidRequest,
+					placement,
 				}));
 			}
 
@@ -584,6 +592,7 @@ async function get_magnite_bid({
 	ad_unit_code,
 	data,
 	bidRequest,
+	placement,
 })
 {
 	const endpoint_url=is_mock ? '?mock=magnite' : 'https://prebid-server.rubiconproject.com/openrtb2/auction';
@@ -614,7 +623,7 @@ async function get_magnite_bid({
 			return null;
 
 		res=await res.json();
-		return get_seatbid(res,size,'magnite');
+		return get_seatbid(res,size,'magnite',placement.id);
 	}
 	catch(e)
 	{
