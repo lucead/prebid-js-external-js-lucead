@@ -10,7 +10,7 @@
 
 import {log,error} from './ayads.js';
 
-const version='v04.09.1';
+const version='v0409.3';
 const fetch_timeout=1200; //individual fetch timemout
 const prerender_pa=false; // to trigger win report
 
@@ -80,7 +80,7 @@ function get_ortb_data(data,bidRequest)
 	return payload;
 };
 
-function get_seatbid(result,size,ssp=null,placement_id=null)
+function get_seatbid(result,size,ssp=null,placement=null)
 {
 	if(!result?.seatbid?.length)
 		return null;
@@ -90,15 +90,19 @@ function get_seatbid(result,size,ssp=null,placement_id=null)
 
 	let bid=bids[0];
 
-	if(bid?.price && location.hostname!=='www.virtuafoot.com')
+	//log bids
+	if(bid?.price && location.hostname!=='www.virtuafoot.com' && !location.hostname.endsWith('.ngrok-free.app'))
 	{
-		fetch(`https://lucead.com/log`,{method:'POST',body:JSON.stringify({
+		fetch(`https://lucead.com/log`,{
+			method:'POST',
+			body:JSON.stringify({
 				bid,
 				result,
 				ssp,
 				version,
-				placement_id,
-			})});
+				placement,
+			}),
+		});
 	}
 
 	return {
@@ -623,7 +627,7 @@ async function get_magnite_bid({
 			return null;
 
 		res=await res.json();
-		return get_seatbid(res,size,'magnite',placement.id);
+		return get_seatbid(res,size,'magnite',placement);
 	}
 	catch(e)
 	{
