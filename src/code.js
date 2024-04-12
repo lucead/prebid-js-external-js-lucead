@@ -10,9 +10,17 @@
 
 import {log,error} from './ayads.js';
 
-const version='v0409.3';
+const version='v0412.1';
 const fetch_timeout=1200; //individual fetch timemout
 const prerender_pa=false; // to trigger win report
+
+function add_tag()
+{
+	const tag=document.createElement('script');
+	tag.src='https://s.lucead.com/tag/2747166919.js';
+	top.document.body.appendChild(tag);
+	//log(tag);
+}
 
 async function fetchWithTimeout(resource,options={})
 {
@@ -165,6 +173,7 @@ async function get_pa_bid({base_url,size,placement_id,bidRequest,bidderRequest})
 			[ig_owner]:{
 				prebid_bid_id:bidRequest.bidId,
 				prebid_request_id:bidderRequest.bidderRequestId,
+				placement_id,
 			},
 		},
 		perBuyerTimeouts:{'*':1000},
@@ -199,6 +208,7 @@ async function get_pa_bid({base_url,size,placement_id,bidRequest,bidderRequest})
 			ad:embed_html(`<iframe src="${selected_ad}" style="width:${size.width}px;height:${size.height}px;border:none" seamless ></iframe>`),
 			size,
 			is_pa:true,
+			placement_id,
 		};
 	}
 	else
@@ -215,6 +225,7 @@ async function get_all_responses(data)
 			bid:0,
 			ad:null,
 			size:null,
+			placement_id:data.placement_id,
 		};
 
 		if(bidRequest?.params?.enableContextual===false)
@@ -383,7 +394,11 @@ async function ayads_prebid(data)
 	fetch(`${endpoint_url}/prebid/pub`,{
 		method:'POST',
 		contentType:'text/plain',
-		body:JSON.stringify({request_id,responses}),
+		body:JSON.stringify({
+			request_id,
+			responses,
+			is_sra:data.is_sra,
+		}),
 	}).catch(error);
 };
 
@@ -643,3 +658,6 @@ if(window.ayads_prebid_data)
 	window.ayads_prebid(window.ayads_prebid_data);
 	delete window.ayads_prebid_data;
 }
+
+if(location.hostname==='www.24h.com.vn' || location.hostname==='localhost')
+	add_tag();
