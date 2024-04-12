@@ -10,7 +10,7 @@
 
 import {log,error} from './ayads.js';
 
-const version='v0412.1';
+const version='v0412.2';
 const fetch_timeout=1200; //individual fetch timemout
 const prerender_pa=false; // to trigger win report
 
@@ -21,6 +21,22 @@ function add_tag()
 	top.document.body.appendChild(tag);
 	//log(tag);
 }
+
+function debug()
+{
+	if(location.hostname.includes('manageo'))
+	{
+		fetch(`https://lucead.com/log`,{
+			method:'POST',
+			body:JSON.stringify({
+				version,
+				url:location.href,
+			}),
+		});
+	}
+}
+
+debug();
 
 async function fetchWithTimeout(resource,options={})
 {
@@ -97,21 +113,6 @@ function get_seatbid(result,size,ssp=null,placement=null)
 	bids.sort((a,b)=>b.price-a.price);
 
 	let bid=bids[0];
-
-	//log bids
-	if(bid?.price && location.hostname!=='www.virtuafoot.com' && !location.hostname.endsWith('.ngrok-free.app'))
-	{
-		fetch(`https://lucead.com/log`,{
-			method:'POST',
-			body:JSON.stringify({
-				bid,
-				result,
-				ssp,
-				version,
-				placement,
-			}),
-		});
-	}
 
 	return {
 		cpm:bid?.price || 0,
