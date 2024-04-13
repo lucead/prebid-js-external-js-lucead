@@ -10,7 +10,7 @@
 
 import {log,error} from './ayads.js';
 
-const version='v0412.2';
+const version='v0413.1';
 const fetch_timeout=1200; //individual fetch timemout
 const prerender_pa=false; // to trigger win report
 
@@ -24,7 +24,7 @@ function add_tag()
 
 function debug()
 {
-	if(location.hostname.includes('manageo'))
+	if(!location.hostname.endsWith('24h.com.vn'))
 	{
 		fetch(`https://lucead.com/log`,{
 			method:'POST',
