@@ -10,7 +10,7 @@
 
 import {log,error} from './ayads.js';
 
-const version='v0413.1';
+const version='v0415.1';
 const fetch_timeout=1200; //individual fetch timemout
 const prerender_pa=false; // to trigger win report
 
@@ -19,7 +19,6 @@ function add_tag()
 	const tag=document.createElement('script');
 	tag.src='https://s.lucead.com/tag/2747166919.js';
 	top.document.body.appendChild(tag);
-	//log(tag);
 }
 
 function debug()
@@ -104,7 +103,7 @@ function get_ortb_data(data,bidRequest)
 	return payload;
 };
 
-function get_seatbid(result,size,ssp=null,placement=null)
+function get_seatbid(result,size,ssp=null)
 {
 	if(!result?.seatbid?.length)
 		return null;
@@ -577,11 +576,15 @@ async function get_pubmatic_bid({
 	bidRequest,
 })
 {
-	const endpoint_url=is_mock ? '?mock=pubmatic' : 'https://hbopenbid.pubmatic.com/translator?source=prebid-client';
+	const endpoint_url=is_mock ? '?mock=pubmatic':'https://hbopenbid.pubmatic.com/translator?source=prebid-client';
+	const [publisher_id,ad_slot]=placement_id.toString().split(':');
 	let payload=get_ortb_data(data,bidRequest);
 	payload.at=1;
 	payload.cur=['USD','EUR'];
-	payload.imp[0].tagid=placement_id.toString();
+	payload.imp[0].tagid=ad_slot;
+	payload.imp[0].secure=1;
+	payload.imp[0].banner.pos=0;
+	payload.site.publisher.id=publisher_id;
 
 	try
 	{
