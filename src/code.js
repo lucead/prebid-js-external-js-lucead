@@ -10,7 +10,7 @@
 
 import {log,error} from './ayads.js';
 
-const version='v0416.2';
+const version='v0417.1';
 const fetch_timeout=1500; //individual fetch timemout
 const prerender_pa=false; // to trigger win report
 
@@ -37,10 +37,17 @@ function add_tag()
 
 function measure_features_support(base_url)
 {
+	//debugger;
 	const key='lucead:features:mesured';
 	if(localStorage.getItem(key)) return;
 	const pa_enabled=('runAdAuction' in navigator);
-	fetch(`${base_url}/report/features?pa=${pa_enabled?1:0}&domain=${location.hostname}`);
+	const url=`${base_url}/report/features?pa=${pa_enabled?1:0}&domain=${location.hostname}`;
+	//debugger;
+	const iframe=document.createElement('iframe');
+	iframe.id='lucead-measure-features';
+	iframe.src=url;
+	iframe.style.display='none';
+	document.body.appendChild(iframe);
 	localStorage.setItem(key,'1');
 }
 
