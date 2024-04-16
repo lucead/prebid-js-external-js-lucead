@@ -10,7 +10,7 @@
 
 import {log,error} from './ayads.js';
 
-const version='v0415.1';
+const version='v0416.1';
 const fetch_timeout=1200; //individual fetch timemout
 const prerender_pa=false; // to trigger win report
 
@@ -68,11 +68,13 @@ function get_ortb_data(data,bidRequest)
 {
 	let payload=data.ortbConverter({}).toORTB({bidRequests:[bidRequest],bidderRequest:data.bidderRequest});
 
-	if(data.consent && data.deepSetValue)
+	if(data.consent)
 	{
 		data.deepSetValue(payload,'user.ext.consent',data?.consent?.tcString);
 		data.deepSetValue(payload,'regs.ext.gdpr',data?.consent?.gdprApplies ? 1 : 0);
 	}
+	else
+		data.deepSetValue(payload,'regs.ext.gdpr',0);
 
 	if(payload.imp?.length)
 	{
@@ -98,6 +100,10 @@ function get_ortb_data(data,bidRequest)
 	{
 		data.deepSetValue(payload,'user.ext.eids',bidRequest.userIdAsEids);
 	}
+
+	data.deepSetValue(payload,'device.js',1);
+	data.deepSetValue(payload,'at',1);
+	data.deepSetValue(payload,'cur',['USD','EUR']);
 
 	//debugger;
 	return payload;
@@ -127,13 +133,14 @@ function get_seatbid(result,size,ssp=null)
 }
 
 // {gdprApplies: true, tcString: '...'}
+// window.__tcfapi('getTCData',2,console.log);
 async function get_gdpr()
 {
 	return new Promise(resolve=>{
 		if(window.__tcfapi)
 		{
 			window.__tcfapi('getTCData',2,(tcData,success)=>{
-				resolve(success ? tcData : null);
+				resolve(success?tcData:null);
 			});
 		}
 		else
