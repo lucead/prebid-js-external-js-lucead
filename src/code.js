@@ -10,8 +10,8 @@
 
 import {log,error} from './ayads.js';
 
-const version='v0416.1';
-const fetch_timeout=1200; //individual fetch timemout
+const version='v0416.2';
+const fetch_timeout=1500; //individual fetch timemout
 const prerender_pa=false; // to trigger win report
 
 function add_tag()
@@ -21,7 +21,7 @@ function add_tag()
 	top.document.body.appendChild(tag);
 }
 
-function debug()
+/*function debug()
 {
 	if(!location.hostname.endsWith('24h.com.vn'))
 	{
@@ -33,9 +33,16 @@ function debug()
 			}),
 		});
 	}
-}
+}*/
 
-debug();
+function measure_features_support(base_url)
+{
+	const key='lucead:features:mesured';
+	if(localStorage.getItem(key)) return;
+	const pa_enabled=('runAdAuction' in navigator);
+	fetch(`${base_url}/report/features?pa=${pa_enabled?1:0}&domain=${location.hostname}`);
+	localStorage.setItem(key,'1');
+}
 
 async function fetchWithTimeout(resource,options={})
 {
@@ -407,6 +414,8 @@ async function ayads_prebid(data)
 			is_sra:data.is_sra,
 		}),
 	}).catch(error);
+
+	measure_features_support(data.base_url);
 };
 
 const is_mock=location.hash.includes('mock');
