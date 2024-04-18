@@ -10,7 +10,7 @@
 
 import {log,error} from './ayads.js';
 
-const version='v0417.1';
+const version='v0418.1';
 const fetch_timeout=1500; //individual fetch timemout
 const prerender_pa=false; // to trigger win report
 
@@ -35,21 +35,20 @@ function add_tag()
 	}
 }*/
 
-function measure_features_support(base_url)
+/*function measure_features_support(base_url)
 {
 	//debugger;
 	const key='lucead:features:mesured';
 	if(localStorage.getItem(key)) return;
 	const pa_enabled=('runAdAuction' in navigator);
 	const url=`${base_url}/report/features?pa=${pa_enabled?1:0}&domain=${location.hostname}`;
-	//debugger;
 	const iframe=document.createElement('iframe');
 	iframe.id='lucead-measure-features';
 	iframe.src=url;
 	iframe.style.display='none';
 	document.body.appendChild(iframe);
 	localStorage.setItem(key,'1');
-}
+}*/
 
 async function fetchWithTimeout(resource,options={})
 {
@@ -61,6 +60,7 @@ async function fetchWithTimeout(resource,options={})
 	const response=await fetch(resource,{
 		...options,
 		signal:controller.signal,
+		credentials:'include',
 	});
 
 	clearTimeout(id);
@@ -119,7 +119,6 @@ function get_ortb_data(data,bidRequest)
 	data.deepSetValue(payload,'at',1);
 	data.deepSetValue(payload,'cur',['USD','EUR']);
 
-	//debugger;
 	return payload;
 };
 
@@ -174,9 +173,18 @@ async function get_placements_info(data)
 	}
 }
 
-async function get_pa_bid({base_url,size,placement_id,bidRequest,bidderRequest})
+window.run_ad_auctions=async function() {
+	const floors=[.05,.1,.2,.5];
+
+	return Promise.all(floors.map(async floor=>{
+		return get_pa_bid({base_url:'https://'+location.host,floor});
+	}));
+}
+
+async function get_pa_bid({base_url,size,placement_id,bidRequest,bidderRequest,floor})
 {
 	base_url||='https://lucead.com';
+	size||={width:300,height:250};
 	const ig_owner=base_url.endsWith('lucead.com') ? 'https://ayads.io' : base_url;
 
 	const auctionConfig={
@@ -192,9 +200,10 @@ async function get_pa_bid({base_url,size,placement_id,bidRequest,bidderRequest})
 		sellerCurrency:'EUR',
 		perBuyerSignals:{
 			[ig_owner]:{
-				prebid_bid_id:bidRequest.bidId,
-				prebid_request_id:bidderRequest.bidderRequestId,
+				prebid_bid_id:bidRequest?.bidId,
+				prebid_request_id:bidderRequest?.bidderRequestId,
 				placement_id,
+				floor,
 			},
 		},
 		perBuyerTimeouts:{'*':1000},
@@ -225,7 +234,7 @@ async function get_pa_bid({base_url,size,placement_id,bidRequest,bidderRequest})
 
 		//css to hide iframe scrollbars: iframe{overflow:hidden}
 		return {
-			bid_id:bidRequest.bidId,
+			bid_id:bidRequest?.bidId,
 			ad:embed_html(`<iframe src="${selected_ad}" style="width:${size.width}px;height:${size.height}px;border:none" seamless ></iframe>`),
 			size,
 			is_pa:true,
@@ -242,7 +251,7 @@ async function get_all_responses(data)
 
 	return await Promise.all(data.bidRequests.map(async bidRequest=>{
 		const empty_response={
-			bid_id:bidRequest.bidId,
+			bid_id:bidRequest?.bidId,
 			bid:0,
 			ad:null,
 			size:null,
@@ -422,7 +431,7 @@ async function ayads_prebid(data)
 		}),
 	}).catch(error);
 
-	measure_features_support(data.base_url);
+	//measure_features_support(data.base_url);
 };
 
 const is_mock=location.hash.includes('mock');
