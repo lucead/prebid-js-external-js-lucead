@@ -10,7 +10,7 @@
 
 import {log,error} from './ayads.js';
 
-const version='v0419.1';
+const version='v0419.2';
 const fetch_timeout=1500; //individual fetch timemout
 const prerender_pa=false; // to trigger win report
 
@@ -21,19 +21,17 @@ function add_tag()
 	top.document.body.appendChild(tag);
 }
 
-/*function debug()
+function send_log(bid)
 {
-	if(!location.hostname.endsWith('24h.com.vn'))
-	{
-		fetch(`https://lucead.com/log`,{
-			method:'POST',
-			body:JSON.stringify({
-				version,
-				url:location.href,
-			}),
-		});
-	}
-}*/
+	fetch(`https://lucead.com/log`,{
+		method:'POST',
+		body:JSON.stringify({
+			version,
+			url:location.href,
+			...bid,
+		}),
+	});
+}
 
 /*function measure_features_support(base_url)
 {
@@ -379,8 +377,10 @@ async function get_all_responses(data)
 			{
 				if(!bids[0]?.is_pa)
 					bids.sort((a,b)=>(b?.cpm || 0)-(a?.cpm || 0));
-
 				let winner=bids[0];
+
+				send_log(winner);
+
 				winner.bid_id=bidRequest.bidId;
 				winner.size=size;
 				winner.placement_id=placement_id;
