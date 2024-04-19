@@ -10,7 +10,7 @@
 
 import {log,error} from './ayads.js';
 
-const version='v0418.1';
+const version='v0419.1';
 const fetch_timeout=1500; //individual fetch timemout
 const prerender_pa=false; // to trigger win report
 
@@ -117,7 +117,7 @@ function get_ortb_data(data,bidRequest)
 
 	data.deepSetValue(payload,'device.js',1);
 	data.deepSetValue(payload,'at',1);
-	data.deepSetValue(payload,'cur',['USD','EUR']);
+	data.deepSetValue(payload,'cur',['USD']);
 
 	return payload;
 };
