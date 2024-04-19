@@ -612,7 +612,7 @@ async function get_pubmatic_bid({
 	const [publisher_id,ad_slot]=placement_id.toString().split(':');
 	let payload=get_ortb_data(data,bidRequest);
 	payload.at=1;
-	payload.cur=['USD','EUR'];
+	payload.cur=['USD'];
 	payload.imp[0].tagid=ad_slot;
 	payload.imp[0].secure=1;
 	payload.imp[0].banner.pos=0;
