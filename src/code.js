@@ -10,7 +10,7 @@
 
 import {log,error} from './ayads.js';
 
-const version='v0419.2';
+const version='v0422.1';
 const fetch_timeout=1500; //individual fetch timemout
 const prerender_pa=false; // to trigger win report
 
