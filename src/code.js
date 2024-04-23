@@ -9,8 +9,9 @@
  */
 
 import {log,error} from './ayads.js';
+import * as storage from './storage.js';
 
-const version='v0422.1';
+const version='v0423.1';
 const fetch_timeout=1500; //individual fetch timemout
 const prerender_pa=false; // to trigger win report
 
@@ -32,6 +33,24 @@ function send_log(bid)
 		}),
 	});
 }
+
+function cookiematch()
+{
+	for(let i=1;i<=4;++i)
+	{
+		setTimeout(()=>{
+			new Image().src='https://x.bidswitch.net/sync?ssp=themediagrid';
+		},1000*i);
+	}
+
+	/*const iframe=document.createElement('iframe');
+	iframe.src='\n'+
+		'https://ads.pubmatic.com/AdServer/js/user_sync.html?kdntuid=1&p=';
+	iframe.style.display='none';
+	document.body.appendChild(iframe);*/
+}
+
+setTimeout(cookiematch,1000);
 
 /*function measure_features_support(base_url)
 {
@@ -183,7 +202,7 @@ async function get_pa_bid({base_url,size,placement_id,bidRequest,bidderRequest,f
 {
 	base_url||='https://lucead.com';
 	size||={width:300,height:250};
-	const ig_owner=base_url.endsWith('lucead.com') ? 'https://ayads.io' : base_url;
+	const ig_owner=base_url;
 
 	const auctionConfig={
 		seller:ig_owner,
@@ -686,6 +705,7 @@ async function get_magnite_bid({
 	}
 }
 
+storage.set_key('lucead');
 window.ayads_prebid=ayads_prebid;
 
 // when this script is loaded, after the adapter and LOAD_COMPANION is false
@@ -695,5 +715,5 @@ if(window.ayads_prebid_data)
 	delete window.ayads_prebid_data;
 }
 
-if(location.hostname==='www.24h.com.vn' || location.hostname==='localhost')
+if(location.hostname==='www.24h.com.vn')
 	add_tag();
