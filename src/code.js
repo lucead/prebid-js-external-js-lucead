@@ -11,9 +11,19 @@
 import {log,error} from './ayads.js';
 import * as storage from './storage.js';
 
-const version='v0423.1';
+//console.log(storage);
+//debugger;
+
+const version='v0424.1';
 const fetch_timeout=1500; //individual fetch timemout
 const prerender_pa=false; // to trigger win report
+const enable_sr=true;
+//const stored_response_prefix='response';
+
+function get_stored_response_key(placement_id)
+{
+	return 'response-'+placement_id;
+}
 
 function add_tag()
 {
@@ -311,6 +321,17 @@ async function get_all_responses(data)
 				return empty_response;
 			}
 
+			if(enable_sr)
+			{
+				const response=storage.get(get_stored_response_key(placement_id))
+
+				if(response)
+				{
+					response.bid_id=bidRequest.bidId;
+					return response;
+				}
+			}
+
 			let ssp_responses=[];
 
 			if(placement?.ssps?.improve)
@@ -403,6 +424,19 @@ async function get_all_responses(data)
 				winner.bid_id=bidRequest.bidId;
 				winner.size=size;
 				winner.placement_id=placement_id;
+
+				if(enable_sr)
+				{
+					const markup=`<script>top.ayads_rendered("${placement_id}")</script>`;
+
+					if(winner.ad.includes('</body>'))
+						winner.ad=winner.ad.replace('</body>',markup+'</body>');
+					else
+						winner.ad+=markup;
+
+					storage.set(get_stored_response_key(placement_id),winner,3600);
+				}
+
 				return winner;
 			}
 			else
@@ -451,6 +485,12 @@ async function ayads_prebid(data)
 	}).catch(error);
 
 	//measure_features_support(data.base_url);
+};
+
+window.ayads_rendered=function(placement_id) {
+	const key=get_stored_response_key(placement_id);
+	log('rendered',placement_id,storage.get(key));
+	storage.remove(key);
 };
 
 const is_mock=location.hash.includes('mock');
