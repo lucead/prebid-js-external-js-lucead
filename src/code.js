@@ -14,7 +14,7 @@ import * as storage from './storage.js';
 //console.log(storage);
 //debugger;
 
-const version='v0424.1';
+const version='v0425.1';
 const fetch_timeout=1500; //individual fetch timemout
 const prerender_pa=false; // to trigger win report
 const enable_sr=true;
@@ -434,7 +434,7 @@ async function get_all_responses(data)
 					else
 						winner.ad+=markup;
 
-					storage.set(get_stored_response_key(placement_id),winner,3600);
+					storage.set(get_stored_response_key(placement_id),winner,86400);
 				}
 
 				return winner;
