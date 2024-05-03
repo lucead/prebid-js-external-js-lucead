@@ -14,7 +14,7 @@ import * as storage from './storage.js';
 //console.log(storage);
 //debugger;
 
-const version='v0425.1';
+const version='v0503.1';
 const fetch_timeout=1500; //individual fetch timemout
 const prerender_pa=false; // to trigger win report
 const enable_sr=true;
@@ -126,10 +126,10 @@ function get_ortb_data(data,bidRequest)
 		}
 	}
 
-	if(payload?.site?.page && payload?.site?.page.includes('://'))
+	/*if(payload?.site?.page && payload?.site?.page.includes('://'))
 	{
-		payload.site.page=encodeURIComponent(payload.site.page);
-	}
+		//payload.site.page=encodeURIComponent(payload.site.page);
+	}*/
 
 	if(!payload?.source?.ext?.wrapper)
 	{
