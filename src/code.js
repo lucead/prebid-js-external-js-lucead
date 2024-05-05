@@ -11,12 +11,9 @@
 import {log,error} from './ayads.js';
 import * as storage from './storage.js';
 
-//console.log(storage);
-//debugger;
-
-const version='v0503.1';
+const version='v0505.1';
 const fetch_timeout=1500; //individual fetch timemout
-const prerender_pa=false; // to trigger win report
+const prerender_pa=true; // to trigger win report
 const enable_sr=true;
 //const stored_response_prefix='response';
 
@@ -60,7 +57,7 @@ function cookiematch()
 	document.body.appendChild(iframe);*/
 }
 
-setTimeout(cookiematch,1000);
+//setTimeout(cookiematch,1000);
 
 /*function measure_features_support(base_url)
 {
@@ -208,8 +205,9 @@ window.run_ad_auctions=async function() {
 	}));
 }
 
-async function get_pa_bid({base_url,size,placement_id,bidRequest,bidderRequest,floor})
+async function get_pa_bid({base_url,size,placement_id,bidRequest,bidderRequest,floor,is_sra})
 {
+	//debugger;
 	base_url||='https://lucead.com';
 	size||={width:300,height:250};
 	const ig_owner=base_url;
@@ -231,6 +229,7 @@ async function get_pa_bid({base_url,size,placement_id,bidRequest,bidderRequest,f
 				prebid_request_id:bidderRequest?.bidderRequestId,
 				placement_id,
 				floor,
+				is_sra,
 			},
 		},
 		perBuyerTimeouts:{'*':1000},
@@ -245,6 +244,7 @@ async function get_pa_bid({base_url,size,placement_id,bidRequest,bidderRequest,f
 	else
 		selected_ad=await navigator.runAdAuction(auctionConfig);
 
+	//debugger;
 	//log('PAAPI',placement_id,selected_ad);
 
 	if(selected_ad)
@@ -419,7 +419,7 @@ async function get_all_responses(data)
 					bids.sort((a,b)=>(b?.cpm || 0)-(a?.cpm || 0));
 				let winner=bids[0];
 
-				send_log(winner);
+				//send_log(winner);
 
 				winner.bid_id=bidRequest.bidId;
 				winner.size=size;
