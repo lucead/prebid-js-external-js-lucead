@@ -11,7 +11,7 @@
 import {log,error} from './ayads.js';
 import * as storage from './storage.js';
 
-const version='v0505.1';
+const version='v0509.1';
 const fetch_timeout=1500; //individual fetch timemout
 const prerender_pa=true; // to trigger win report
 const enable_sr=true;
@@ -220,9 +220,12 @@ async function get_pa_bid({base_url,size,placement_id,bidRequest,bidderRequest,f
 			size,
 			placement_id,
 		},
+		requestedSize:size,
+		allSlotsRequestedSizes:[size],
 		sellerSignals:{},
 		sellerTimeout:1000,
 		sellerCurrency:'EUR',
+		//deprecatedRenderURLReplacements:{'${AD_WIDTH}':'300','%%SELLER_ALT%%':'exampleSSP'},
 		perBuyerSignals:{
 			[ig_owner]:{
 				prebid_bid_id:bidRequest?.bidId,
@@ -242,7 +245,10 @@ async function get_pa_bid({base_url,size,placement_id,bidRequest,bidderRequest,f
 	if(!navigator.runAdAuction || location.hash.includes('skip-pa'))
 		selected_ad=null;
 	else
+	{
 		selected_ad=await navigator.runAdAuction(auctionConfig);
+		await navigator.deprecatedReplaceInURN(selected_ad,{'${PLACEMENT_ID}':placement_id});
+	}
 
 	//debugger;
 	//log('PAAPI',placement_id,selected_ad);
@@ -747,13 +753,6 @@ async function get_magnite_bid({
 
 storage.set_key('lucead');
 window.ayads_prebid=ayads_prebid;
+window.lucead_prebid=ayads_prebid;
 
-// when this script is loaded, after the adapter and LOAD_COMPANION is false
-if(window.ayads_prebid_data)
-{
-	window.ayads_prebid(window.ayads_prebid_data);
-	delete window.ayads_prebid_data;
-}
-
-if(location.hostname==='www.24h.com.vn')
-	add_tag();
+//if(location.hostname==='www.24h.com.vn')add_tag();
