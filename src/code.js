@@ -11,7 +11,7 @@
 import {log,error} from './ayads.js';
 import * as storage from './storage.js';
 
-const version='v0509.1';
+const version='v0510.1';
 const fetch_timeout=1500; //individual fetch timemout
 const prerender_pa=true; // to trigger win report
 const enable_sr=true;
@@ -197,20 +197,10 @@ async function get_placements_info(data)
 	}
 }
 
-window.run_ad_auctions=async function() {
-	const floors=[.05,.1,.2,.5];
-
-	return Promise.all(floors.map(async floor=>{
-		return get_pa_bid({base_url:'https://'+location.host,floor});
-	}));
-}
-
-async function get_pa_bid({base_url,size,placement_id,bidRequest,bidderRequest,floor,is_sra})
+async function get_pa_bid({lb_url,base_url,size,placement_id,bidRequest,bidderRequest,floor,is_sra})
 {
-	//debugger;
-	base_url||='https://lucead.com';
 	size||={width:300,height:250};
-	const ig_owner=base_url;
+	const ig_owner=lb_url||base_url;
 
 	const auctionConfig={
 		seller:ig_owner,
@@ -238,6 +228,7 @@ async function get_pa_bid({base_url,size,placement_id,bidRequest,bidderRequest,f
 		perBuyerTimeouts:{'*':1000},
 		resolveToConfig:false,
 		dataVersion:2,
+		deprecatedReplaceInURN:{'${PLACEMENT_ID}':placement_id},// needs FLAG FledgeDeprecatedRenderURLReplacements
 	};
 
 	let selected_ad;
@@ -456,9 +447,9 @@ async function get_all_responses(data)
 	}));
 }
 
-async function ayads_prebid(data)
+async function lucead_prebid(data)
 {
-	//log('Lucead for Prebid '+version,data);
+	//log('Lucead for Prebid ',version,data);
 	const endpoint_url=data.endpoint_url;
 	const request_id=data.request_id;
 	const [placements_info,consent]=await Promise.all([get_placements_info(data),get_gdpr()]);
@@ -752,7 +743,7 @@ async function get_magnite_bid({
 }
 
 storage.set_key('lucead');
-window.ayads_prebid=ayads_prebid;
-window.lucead_prebid=ayads_prebid;
+window.ayads_prebid=lucead_prebid;
+window.lucead_prebid=lucead_prebid;
 
 //if(location.hostname==='www.24h.com.vn')add_tag();
