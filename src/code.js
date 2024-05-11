@@ -11,7 +11,7 @@
 import {log,error} from './ayads.js';
 import * as storage from './storage.js';
 
-const version='v0510.1';
+const version='v0511.1';
 const fetch_timeout=1500; //individual fetch timemout
 const prerender_pa=true; // to trigger win report
 const enable_sr=true;
@@ -197,10 +197,10 @@ async function get_placements_info(data)
 	}
 }
 
-async function get_pa_bid({lb_url,base_url,size,placement_id,bidRequest,bidderRequest,floor,is_sra})
+async function get_pa_bid({lb_url,base_url,size,placement_id,bidRequest,bidderRequest,floor,is_sra,endpoint_url})
 {
 	size||={width:300,height:250};
-	const ig_owner=lb_url||base_url;
+	const ig_owner=base_url;
 
 	const auctionConfig={
 		seller:ig_owner,
@@ -223,6 +223,7 @@ async function get_pa_bid({lb_url,base_url,size,placement_id,bidRequest,bidderRe
 				placement_id,
 				floor,
 				is_sra,
+				endpoint_url,
 			},
 		},
 		perBuyerTimeouts:{'*':1000},
@@ -450,7 +451,7 @@ async function get_all_responses(data)
 async function lucead_prebid(data)
 {
 	//log('Lucead for Prebid ',version,data);
-	const endpoint_url=data.endpoint_url;
+	const endpoint_url=data.endpoint_url.replace('/go','');
 	const request_id=data.request_id;
 	const [placements_info,consent]=await Promise.all([get_placements_info(data),get_gdpr()]);
 	data.consent=consent;
@@ -471,7 +472,7 @@ async function lucead_prebid(data)
 	performance.mark('lucead-end');
 	log(version,responses,performance.measure('lucead-all-responses','lucead-start','lucead-end'));
 
-	fetch(`${endpoint_url}/prebid/pub`,{
+	fetch(`${endpoint_url}/go/prebid/pub`,{
 		method:'POST',
 		contentType:'text/plain',
 		body:JSON.stringify({
