@@ -11,7 +11,7 @@
 import {log,error} from './ayads.js';
 import * as storage from './storage.js';
 
-const version='v0511.1';
+const version='v0512.1';
 const fetch_timeout=1500; //individual fetch timemout
 const prerender_pa=true; // to trigger win report
 const enable_sr=true;
@@ -61,7 +61,6 @@ function cookiematch()
 
 /*function measure_features_support(base_url)
 {
-	//debugger;
 	const key='lucead:features:mesured';
 	if(localStorage.getItem(key)) return;
 	const pa_enabled=('runAdAuction' in navigator);
@@ -239,14 +238,14 @@ async function get_pa_bid({lb_url,base_url,size,placement_id,bidRequest,bidderRe
 	else
 	{
 		selected_ad=await navigator.runAdAuction(auctionConfig);
-		await navigator.deprecatedReplaceInURN(selected_ad,{'${PLACEMENT_ID}':placement_id});
 	}
 
-	//debugger;
 	//log('PAAPI',placement_id,selected_ad);
 
 	if(selected_ad)
 	{
+		await navigator.deprecatedReplaceInURN(selected_ad,{'${PLACEMENT_ID}':placement_id});
+
 		//prerender ad to trigger win report
 		if(prerender_pa)
 		{
@@ -450,15 +449,16 @@ async function get_all_responses(data)
 
 async function lucead_prebid(data)
 {
-	//log('Lucead for Prebid ',version,data);
+	log('Lucead for Prebid ',version,data);
 	const endpoint_url=data.endpoint_url.replace('/go','');
 	const request_id=data.request_id;
 	const [placements_info,consent]=await Promise.all([get_placements_info(data),get_gdpr()]);
 	data.consent=consent;
 	data.placements_info=placements_info;
-	performance.mark('lucead-start');
+	//performance.mark('lucead-start');
 
 	let responses=null;
+
 
 	try
 	{
@@ -469,8 +469,8 @@ async function lucead_prebid(data)
 		error(e);
 	}
 
-	performance.mark('lucead-end');
-	log(version,responses,performance.measure('lucead-all-responses','lucead-start','lucead-end'));
+	//performance.mark('lucead-end');
+	//log(version,responses,performance.measure('lucead-all-responses','lucead-start','lucead-end'));
 
 	fetch(`${endpoint_url}/go/prebid/pub`,{
 		method:'POST',
