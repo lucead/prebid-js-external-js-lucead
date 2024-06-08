@@ -8,10 +8,10 @@
  * https://www.sanook.com/
  */
 
-import {log,error} from './ayads.js';
+import {log,error} from './utils.js';
 import * as storage from './storage.js';
 
-const version='v0512.1';
+const version='v0608.1';
 const fetch_timeout=1500; //individual fetch timemout
 const prerender_pa=true; // to trigger win report
 const enable_sr=true;
@@ -22,7 +22,7 @@ function get_stored_response_key(placement_id)
 	return 'response-'+placement_id;
 }
 
-function add_tag()
+/*function add_tag()
 {
 	const tag=document.createElement('script');
 	tag.src='https://s.lucead.com/tag/2747166919.js';
@@ -54,13 +54,15 @@ function cookiematch()
 	iframe.src='\n'+
 		'https://ads.pubmatic.com/AdServer/js/user_sync.html?kdntuid=1&p=';
 	iframe.style.display='none';
-	document.body.appendChild(iframe);*/
-}
+	document.body.appendChild(iframe);* /
+}*/
 
 //setTimeout(cookiematch,1000);
 
-/*function measure_features_support(base_url)
+function measure_features_support(base_url)
 {
+	const is_chrome = /Chrome/.test(navigator.userAgent);
+	if(!is_chrome) return;
 	const key='lucead:features:mesured';
 	if(localStorage.getItem(key)) return;
 	const pa_enabled=('runAdAuction' in navigator);
@@ -71,7 +73,7 @@ function cookiematch()
 	iframe.style.display='none';
 	document.body.appendChild(iframe);
 	localStorage.setItem(key,'1');
-}*/
+}
 
 async function fetchWithTimeout(resource,options={})
 {
@@ -142,6 +144,9 @@ function get_ortb_data(data,bidRequest)
 	data.deepSetValue(payload,'at',1);
 	data.deepSetValue(payload,'cur',['USD']);
 
+	//schain
+	data.deepSetValue(payload,'source.ext.schain',pbjs.getConfig('schain'));
+
 	return payload;
 };
 
@@ -184,7 +189,7 @@ async function get_gdpr()
 	});
 }
 
-async function get_placements_info(data)
+/*async function get_placements_info(data)
 {
 	try
 	{
@@ -194,9 +199,21 @@ async function get_placements_info(data)
 	{
 		return null;
 	}
+}*/
+
+async function get_site(data)
+{
+	try
+	{
+		return await fetch(`${data.static_url}/prebid/site?p=`+data.bidRequests[0].params.placementId).then(r=>r.json());
+	}
+	catch(e)
+	{
+		return null;
+	}
 }
 
-async function get_pa_bid({lb_url,base_url,size,placement_id,bidRequest,bidderRequest,floor,is_sra,endpoint_url})
+async function get_pa_bid({base_url,size,placement_id,bidRequest,bidderRequest,floor,is_sra,endpoint_url})
 {
 	size||={width:300,height:250};
 	const ig_owner=base_url;
@@ -228,7 +245,7 @@ async function get_pa_bid({lb_url,base_url,size,placement_id,bidRequest,bidderRe
 		perBuyerTimeouts:{'*':1000},
 		resolveToConfig:false,
 		dataVersion:2,
-		deprecatedReplaceInURN:{'${PLACEMENT_ID}':placement_id},// needs FLAG FledgeDeprecatedRenderURLReplacements
+		deprecatedReplaceInURN:{'${PLACEMENT_ID}':placement_id,'${DOMAIN}':location.hostname},// needs FLAG FledgeDeprecatedRenderURLReplacements
 	};
 
 	let selected_ad;
@@ -244,7 +261,7 @@ async function get_pa_bid({lb_url,base_url,size,placement_id,bidRequest,bidderRe
 
 	if(selected_ad)
 	{
-		await navigator.deprecatedReplaceInURN(selected_ad,{'${PLACEMENT_ID}':placement_id});
+		await navigator.deprecatedReplaceInURN(selected_ad,{'${PLACEMENT_ID}':placement_id,'${DOMAIN}':location.hostname});
 
 		//prerender ad to trigger win report
 		if(prerender_pa)
@@ -271,7 +288,7 @@ async function get_pa_bid({lb_url,base_url,size,placement_id,bidRequest,bidderRe
 
 async function get_all_responses(data)
 {
-	const placements_info=data.placements_info;
+	const site=data.site;
 
 	return await Promise.all(data.bidRequests.map(async bidRequest=>{
 		const empty_response={
@@ -310,11 +327,11 @@ async function get_all_responses(data)
 			if(pa_response)
 				return pa_response;
 
-			const placement=placements_info[placement_id]||null;
+			const placement=site.placements[placement_id]||null;
 
 			if(!placement?.ssps)
 			{
-				log('No placement info',placement_id,placements_info);
+				log('No placement',placement_id);
 				return empty_response;
 			}
 
@@ -424,7 +441,7 @@ async function get_all_responses(data)
 
 				if(enable_sr)
 				{
-					const markup=`<script>top.ayads_rendered("${placement_id}")</script>`;
+					const markup=`<script>top.lucead_rendered("${placement_id}")</script>`;
 
 					if(winner.ad.includes('</body>'))
 						winner.ad=winner.ad.replace('</body>',markup+'</body>');
@@ -449,16 +466,14 @@ async function get_all_responses(data)
 
 async function lucead_prebid(data)
 {
-	log('Lucead for Prebid ',version,data);
 	const endpoint_url=data.endpoint_url.replace('/go','');
 	const request_id=data.request_id;
-	const [placements_info,consent]=await Promise.all([get_placements_info(data),get_gdpr()]);
-	data.consent=consent;
-	data.placements_info=placements_info;
+	//const [site,consent]=await Promise.all([get_site(data),]);
+	data.site=window.lucead_site || await get_site(data);
+	data.consent=await get_gdpr();
+	log('Lucead for Prebid ',version,data);
 	//performance.mark('lucead-start');
-
 	let responses=null;
-
 
 	try
 	{
@@ -482,10 +497,10 @@ async function lucead_prebid(data)
 		}),
 	}).catch(error);
 
-	//measure_features_support(data.base_url);
+	measure_features_support(data.base_url);
 };
 
-window.ayads_rendered=function(placement_id) {
+window.lucead_rendered=function(placement_id) {
 	const key=get_stored_response_key(placement_id);
 	log('rendered',placement_id,storage.get(key));
 	storage.remove(key);
@@ -672,7 +687,7 @@ async function get_pubmatic_bid({
 	payload.cur=['USD'];
 	payload.imp[0].tagid=ad_slot;
 	payload.imp[0].secure=1;
-	payload.imp[0].banner.pos=0;
+	payload.imp[0].banner.pos='0';
 	payload.site.publisher.id=publisher_id;
 
 	try
@@ -743,8 +758,22 @@ async function get_magnite_bid({
 	}
 }
 
-storage.set_key('lucead');
-window.ayads_prebid=lucead_prebid;
-window.lucead_prebid=lucead_prebid;
+
+function run()
+{
+	storage.set_key('lucead');
+
+	if(window.lucead_prebid_data)
+	{
+		lucead_prebid(window.lucead_prebid_data);
+	}
+	else
+	{
+		window.ayads_prebid=lucead_prebid;
+		window.lucead_prebid=lucead_prebid;
+	}
+}
+
+run();
 
 //if(location.hostname==='www.24h.com.vn')add_tag();
