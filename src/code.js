@@ -61,9 +61,20 @@ function cookiematch()
 
 function measure_features_support(base_url)
 {
-	const is_chrome = /Chrome/.test(navigator.userAgent);
-	if(!is_chrome) return;
-	const key='lucead:features:mesured';
+	const isChromium=window.chrome;
+	const winNav=window.navigator;
+	// noinspection JSDeprecatedSymbols
+	const vendorName=winNav.vendor;
+	const isOpera=typeof window.opr!=='undefined';
+	const isIEedge=winNav.userAgent.indexOf('Edg')> -1;
+	const isIOSChrome=winNav.userAgent.match('CriOS');
+
+	if(isIOSChrome)
+		log('Chrome on IOS')
+	else if(!(isChromium!==null && typeof isChromium!=='undefined' && vendorName==='Google Inc.' && isOpera===false && isIEedge===false))
+		return;
+
+	const key='lucead:features:mesured2';
 	if(localStorage.getItem(key)) return;
 	const pa_enabled=('runAdAuction' in navigator);
 	const url=`${base_url}/report/features?pa=${pa_enabled?1:0}&domain=${location.hostname}`;
