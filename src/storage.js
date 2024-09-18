@@ -77,6 +77,7 @@ export function xhr_handle_response(xhr)
 export function get(k)
 {
 	let values=get_values();
+	//debugger;
 	return (values[k] && values[k][0]) || null;
 }
 

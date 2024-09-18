@@ -8,19 +8,54 @@
  * https://www.sanook.com/
  */
 
-import {log,error} from './utils.js';
+import {log,error,get_device} from './utils.js';
 import * as storage from './storage.js';
 
-const version='v0608.1';
+// noinspection JSUnusedLocalSymbols
+const version='v0912.1';
 const fetch_timeout=1500; //individual fetch timemout
 const prerender_pa=true; // to trigger win report
 const enable_sr=true;
+const pbjs=window.rtbpbjs || window.pbjs || window._abPbJs;
+let site;//global site
+const is_dev=window.location.hash.includes("prebid-dev");
 //const stored_response_prefix='response';
 
 function get_stored_response_key(placement_id)
 {
 	return 'response-'+placement_id;
 }
+
+function get_schain()
+{
+	let schain={
+		ver:'1.0',
+		complete:1,
+		nodes:[
+			{
+				asi:site.schain_domain,
+				sid:site.schain_id,
+			}
+		]
+	}
+
+	if(pbjs && pbjs.getConfig('schain'))
+	{
+		for(const node of pbjs?.getConfig('schain')?.nodes)
+		{
+			schain.nodes.push(node);
+		}
+	}
+
+	return schain;
+}
+
+function uniqid()
+{
+	return `${Math.trunc(Math.random()*1000000000)}`;
+};
+
+window.uniqid=uniqid;
 
 /*function add_tag()
 {
@@ -59,6 +94,7 @@ function cookiematch()
 
 //setTimeout(cookiematch,1000);
 
+// noinspection JSUnusedLocalSymbols
 function measure_features_support(base_url)
 {
 	const isChromium=window.chrome;
@@ -156,7 +192,7 @@ function get_ortb_data(data,bidRequest)
 	data.deepSetValue(payload,'cur',['USD']);
 
 	//schain
-	data.deepSetValue(payload,'source.ext.schain',pbjs.getConfig('schain'));
+	data.deepSetValue(payload,'source.ext.schain',get_schain());//pbjs.getConfig('schain')
 
 	return payload;
 };
@@ -224,21 +260,21 @@ async function get_site(data)
 	}
 }
 
-async function get_pa_bid({base_url,size,placement_id,bidRequest,bidderRequest,floor,is_sra,endpoint_url})
+async function get_pa_bid({base_url,sizes,placement_id,bidRequest,bidderRequest,floor,is_sra,endpoint_url})
 {
-	size||={width:300,height:250};
+	sizes||=[{width:300,height:250}];
 	const ig_owner=base_url;
+	const device=get_device();
 
 	const auctionConfig={
 		seller:ig_owner,
 		decisionLogicUrl:`${ig_owner}/js/ssp.js`,
-		interestGroupBuyers:[ig_owner],
+		interestGroupBuyers:[ig_owner,'https://ps.avads.net'],
 		auctionSignals:{
-			size,
+			sizes,
 			placement_id,
 		},
-		requestedSize:size,
-		allSlotsRequestedSizes:[size],
+		requestedSize:sizes[0],
 		sellerSignals:{},
 		sellerTimeout:1000,
 		sellerCurrency:'EUR',
@@ -246,11 +282,13 @@ async function get_pa_bid({base_url,size,placement_id,bidRequest,bidderRequest,f
 		perBuyerSignals:{
 			[ig_owner]:{
 				prebid_bid_id:bidRequest?.bidId,
-				prebid_request_id:bidderRequest?.bidderRequestId,
+				prebid_request_id:window.lucead_request_id || bidderRequest?.bidderRequestId,
 				placement_id,
 				floor,
 				is_sra,
 				endpoint_url,
+				device,
+				is_dev,
 			},
 		},
 		perBuyerTimeouts:{'*':1000},
@@ -285,10 +323,10 @@ async function get_pa_bid({base_url,size,placement_id,bidRequest,bidderRequest,f
 		}
 
 		//css to hide iframe scrollbars: iframe{overflow:hidden}
+		// noinspection HtmlDeprecatedAttribute
 		return {
 			bid_id:bidRequest?.bidId,
-			ad:embed_html(`<iframe src="${selected_ad}" style="width:${size.width}px;height:${size.height}px;border:none" seamless ></iframe>`),
-			size,
+			ad:embed_html(`<iframe src="${selected_ad}" style="width:100%;height:100%;border:none;overflow:hidden" seamless="seamless" scrolling="no" ></iframe>`),
 			is_pa:true,
 			placement_id,
 		};
@@ -310,15 +348,12 @@ async function get_all_responses(data)
 			placement_id:data.placement_id,
 		};
 
-		if(bidRequest?.params?.enableContextual===false)
-		{
-			return empty_response;
-		}
-
 		const size={
 			width:bidRequest.sizes[0][0] || 300,
 			height:bidRequest.sizes[0][1] || 250,
 		};
+
+		const sizes=bidRequest.sizes.map(s=>({width:s[0],height:s[1]}));
 
 		try
 		{
@@ -329,7 +364,7 @@ async function get_all_responses(data)
 
 			const pa_response=await get_pa_bid({
 				...data,
-				size,
+				sizes,
 				placement_id,
 				data,
 				bidRequest,
@@ -444,8 +479,7 @@ async function get_all_responses(data)
 					bids.sort((a,b)=>(b?.cpm || 0)-(a?.cpm || 0));
 				let winner=bids[0];
 
-				//send_log(winner);
-
+				if(winner.ssp) winner.cpm*=.8;
 				winner.bid_id=bidRequest.bidId;
 				winner.size=size;
 				winner.placement_id=placement_id;
@@ -478,11 +512,11 @@ async function get_all_responses(data)
 async function lucead_prebid(data)
 {
 	const endpoint_url=data.endpoint_url.replace('/go','');
-	const request_id=data.request_id;
-	//const [site,consent]=await Promise.all([get_site(data),]);
-	data.site=window.lucead_site || await get_site(data);
+	const request_id=window.lucead_request_id || data.request_id;
+	site=window.lucead_site || await get_site(data);
+	data.site=site;
 	data.consent=await get_gdpr();
-	log('Lucead for Prebid ',version,data);
+	is_dev && log('Lucead for Prebid ',version,data);
 	//performance.mark('lucead-start');
 	let responses=null;
 
@@ -503,12 +537,14 @@ async function lucead_prebid(data)
 		contentType:'text/plain',
 		body:JSON.stringify({
 			request_id,
+			pa_enabled:!!navigator.runAdAuction,
+			domain:location.hostname,
 			responses,
 			is_sra:data.is_sra,
 		}),
 	}).catch(error);
 
-	measure_features_support(data.base_url);
+	//measure_features_support(data.base_url);
 };
 
 window.lucead_rendered=function(placement_id) {
@@ -642,7 +678,7 @@ async function get_smart_bid({
 		timeout:3000,
 		bidId:bid_id,
 		prebidVersion:prebid_version || '8.37.0',
-		schain:pbjs.getConfig('schain'),
+		schain:get_schain(),
 		gpid:ad_unit_code,
 		sizes:sizes.map(s=>({w:s[0],h:s[1]})),
 		//sizes:[{w:size.width,h:size.height}],
@@ -769,6 +805,10 @@ async function get_magnite_bid({
 	}
 }
 
+function prefetch_bids()
+{
+
+}
 
 function run()
 {
@@ -782,6 +822,12 @@ function run()
 	{
 		window.ayads_prebid=lucead_prebid;
 		window.lucead_prebid=lucead_prebid;
+	}
+
+	if(is_dev)
+	{
+		window.lucead_request_id=uniqid();
+		prefetch_bids();
 	}
 }
 
