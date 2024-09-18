@@ -12,8 +12,8 @@ import {log,error,get_device} from './utils.js';
 import * as storage from './storage.js';
 
 // noinspection JSUnusedLocalSymbols
-const version='v0912.1';
-const fetch_timeout=1500; //individual fetch timemout
+const version='v0923.4';
+const fetch_timeout=1800; //individual fetch timemout
 const prerender_pa=true; // to trigger win report
 const enable_sr=true;
 const pbjs=window.rtbpbjs || window.pbjs || window._abPbJs;
@@ -153,6 +153,7 @@ function embed_html(html)
 function get_ortb_data(data,bidRequest)
 {
 	let payload=data.ortbConverter({}).toORTB({bidRequests:[bidRequest],bidderRequest:data.bidderRequest});
+	//debugger;
 
 	if(data.consent)
 	{
@@ -187,9 +188,9 @@ function get_ortb_data(data,bidRequest)
 		data.deepSetValue(payload,'user.ext.eids',bidRequest.userIdAsEids);
 	}
 
-	data.deepSetValue(payload,'device.js',1);
-	data.deepSetValue(payload,'at',1);
-	data.deepSetValue(payload,'cur',['USD']);
+	//data.deepSetValue(payload,'device.js',1);
+	//data.deepSetValue(payload,'at',1);
+	//data.deepSetValue(payload,'cur',['USD']);
 
 	//schain
 	data.deepSetValue(payload,'source.ext.schain',get_schain());//pbjs.getConfig('schain')
@@ -202,7 +203,7 @@ function get_seatbid(result,size,ssp=null)
 	if(!result?.seatbid?.length)
 		return null;
 
-	let bids=result.seatbid[0].bid.filter(b=>b && b.price>0 && b.adm && b.w===size.width && b.h===size.height);
+	let bids=result.seatbid[0].bid.filter(b=>b && b.price>0 && b.adm);// && b.w===size.width && b.h===size.height
 	bids.sort((a,b)=>b.price-a.price);
 
 	let bid=bids[0];
@@ -212,8 +213,8 @@ function get_seatbid(result,size,ssp=null)
 		currency:result.cur||'USD',
 		ad:embed_html(bid?.adm || null),
 		size:{
-			width:bid?.w || size.width,
-			height:bid?.h || size.height,
+			width:bid?.w,// || size.width,
+			height:bid?.h,// || size.height,
 		},
 		ssp,
 		advertiser_domains:bid?.adomain || null,
@@ -290,6 +291,9 @@ async function get_pa_bid({base_url,sizes,placement_id,bidRequest,bidderRequest,
 				device,
 				is_dev,
 			},
+			'https://ps.avads.net':{
+				currency:'EUR',
+			}
 		},
 		perBuyerTimeouts:{'*':1000},
 		resolveToConfig:false,
@@ -304,6 +308,17 @@ async function get_pa_bid({base_url,sizes,placement_id,bidRequest,bidderRequest,
 	else
 	{
 		selected_ad=await navigator.runAdAuction(auctionConfig);
+	}
+
+	//Antvoice
+	if(selected_ad)
+	{
+		const iframe=document.createElement('iframe');//force the request to url, to trigger the report network request
+		iframe.src=selected_ad;
+		iframe.style.display='none';
+		document.body.appendChild(iframe);
+		iframe.remove();
+		selected_ad=null;
 	}
 
 	//log('PAAPI',placement_id,selected_ad);
@@ -345,13 +360,13 @@ async function get_all_responses(data)
 			bid:0,
 			ad:null,
 			size:null,
-			placement_id:data.placement_id,
+			placement_id:bidRequest?.params?.placementId || data.placement_id,
 		};
 
-		const size={
+		/*const size={
 			width:bidRequest.sizes[0][0] || 300,
 			height:bidRequest.sizes[0][1] || 250,
-		};
+		};*/
 
 		const sizes=bidRequest.sizes.map(s=>({width:s[0],height:s[1]}));
 
@@ -398,7 +413,7 @@ async function get_all_responses(data)
 			{
 				ssp_responses.push(get_improve_bid({
 					...data,
-					size,
+					//size,
 					placement_id:placement?.ssps?.improve,
 					data,
 					bidRequest,
@@ -409,7 +424,7 @@ async function get_all_responses(data)
 			{
 				ssp_responses.push(get_grid_bid({
 					...data,
-					size,
+					//size,
 					placement_id:placement?.ssps.grid,
 					deepSetValue:data.deepSetValue,
 					data,
@@ -422,7 +437,7 @@ async function get_all_responses(data)
 				ssp_responses.push(get_smart_bid({
 					...data,
 					sizes:bidRequest.sizes,
-					size,
+					//size,
 					placement_id:placement?.ssps?.smart,
 					transaction_id:bidRequest.transactionId,
 					bid_id:bidRequest.bidId,
@@ -437,7 +452,7 @@ async function get_all_responses(data)
 			{
 				ssp_responses.push(get_pubmatic_bid({
 					...data,
-					size,
+					//size,
 					placement_id:placement?.ssps?.pubmatic,
 					transaction_id:bidRequest.transactionId,
 					bid_id:bidRequest.bidId,
@@ -451,7 +466,7 @@ async function get_all_responses(data)
 			{
 				ssp_responses.push(get_magnite_bid({
 					...data,
-					size,
+					//size,
 					placement_id:placement?.ssps?.magnite,
 					ad_unit_code:bidRequest.adUnitCode,
 					data,
@@ -481,7 +496,7 @@ async function get_all_responses(data)
 
 				if(winner.ssp) winner.cpm*=.8;
 				winner.bid_id=bidRequest.bidId;
-				winner.size=size;
+				//winner.size=size;
 				winner.placement_id=placement_id;
 
 				if(enable_sr)
@@ -537,7 +552,7 @@ async function lucead_prebid(data)
 		contentType:'text/plain',
 		body:JSON.stringify({
 			request_id,
-			pa_enabled:!!navigator.runAdAuction,
+			pa_enabled:'runAdAuction' in navigator?'on':'off',
 			domain:location.hostname,
 			responses,
 			is_sra:data.is_sra,
@@ -559,7 +574,7 @@ async function get_improve_bid({
 	data,
 	bidRequest,
 	prebid_version,
-	size,
+	//size,
 	placement_id,
 })
 {
@@ -567,16 +582,18 @@ async function get_improve_bid({
 		'?mock=improve' :
 		'https://ad.360yield.com/pb';
 	const ortb=get_ortb_data(data,bidRequest);
-
-	ortb.imp[0].ext.bidder={placementId:placement_id || 22511670};
+	//debugger;
+	ortb.imp[0].ext.bidder={placementId:parseInt(placement_id) || 22511670};
 	// noinspection JSValidateTypes
 	//ortb.imp[0].banner.format=[{w:size.width||300,h:size.height||250}];
 	//ortb.id=getUniqueIdentifierStr();
 	ortb.ext={'improvedigital':{'sdk':{'name':'pbjs','version':prebid_version || '8.32.0'}}};
 
+	//debugger;
+
 	try
 	{
-		performance.mark('lucead-improve-start');
+		//performance.mark('lucead-improve-start');
 		let res=await fetchWithTimeout(endpoint_url,{
 			method:'POST',
 			contentType:'text/plain',
@@ -586,12 +603,12 @@ async function get_improve_bid({
 		if(res.status!==200)
 			return null;
 
-		res= await res.json();
+		res=await res.json();
 
 		if(!res?.seatbid[0]?.bid[0]?.price)
 			return null;
 
-		performance.mark('lucead-improve-end');
+		//performance.mark('lucead-improve-end');
 		return get_seatbid(res,size,'improve');
 	}
 	catch(e)
@@ -831,6 +848,5 @@ function run()
 	}
 }
 
+if(location.hostname.includes('24h.com.vn'))
 run();
-
-//if(location.hostname==='www.24h.com.vn')add_tag();
