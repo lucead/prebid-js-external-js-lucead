@@ -12,7 +12,7 @@ import {log,error,get_device} from './utils.js';
 import * as storage from './storage.js';
 
 // noinspection JSUnusedLocalSymbols
-const version='v0923.4';
+const version='v0924.1';
 const fetch_timeout=1800; //individual fetch timemout
 const prerender_pa=true; // to trigger win report
 const enable_sr=true;
@@ -163,7 +163,7 @@ function get_ortb_data(data,bidRequest)
 	else
 		data.deepSetValue(payload,'regs.ext.gdpr',0);
 
-	if(payload.imp?.length)
+	if(payload.imp?.length && bidRequest?.sizes?.length)
 	{
 		for(const imp of payload.imp)
 		{
@@ -574,7 +574,6 @@ async function get_improve_bid({
 	data,
 	bidRequest,
 	prebid_version,
-	//size,
 	placement_id,
 })
 {
@@ -582,14 +581,40 @@ async function get_improve_bid({
 		'?mock=improve' :
 		'https://ad.360yield.com/pb';
 	const ortb=get_ortb_data(data,bidRequest);
-	//debugger;
-	ortb.imp[0].ext.bidder={placementId:parseInt(placement_id) || 22511670};
-	// noinspection JSValidateTypes
-	//ortb.imp[0].banner.format=[{w:size.width||300,h:size.height||250}];
-	//ortb.id=getUniqueIdentifierStr();
-	ortb.ext={'improvedigital':{'sdk':{'name':'pbjs','version':prebid_version || '8.32.0'}}};
+	//ortb.imp[0].ext.bidder={placementId:parseInt(placement_id) || 22511670};
 
-	//debugger;
+	let parts=placement_id.toString().split(':');
+
+	ortb.imp=[{
+		ext:{
+			tid:ortb.source.tid,
+			bidder:parts.length>1 ? {
+				publisherId:parseInt(parts[0]) || 1159,
+				placementId:parseInt(parts[1]) || 22511670,
+			}:{
+				placementId:parseInt(parts[0]) || 22511670
+			},
+		},
+		banner:{topframe:1},
+		id:bidRequest.bidId,
+		secure:1,
+	}];
+	// noinspection JSValidateTypes
+	//ortb.imp[0].banner.format=bidRequest.sizes.map(s=>({w:s[0],h:s[1]}));
+		//[{w:bidRequest.sizes[0][0]||300,h:bidRequest.sizes[0]?[1]||250}];
+	ortb.id=bidRequest.bidderRequestId;
+	ortb.ext={
+		improvedigital:{
+			sdk:{
+				name:'pbjs',
+				version:prebid_version || '8.55.0',
+			}
+		}
+	};
+
+	//delete ortb.regs;
+	//delete ortb.user;
+	delete ortb.source.ext;
 
 	try
 	{
