@@ -114,7 +114,7 @@ function measure_features()
 
 	const pa_on=!!navigator.runAdAuction;
 	const topics_on=!!document.browsingTopics;
-	const url=`${endpoint_url}/go/report/features?is_chrome=${is_chrome()?1:0}&pa_on=${pa_on?1:0}&topics_on=${topics_on?1:0}&domain=${encodeURIComponent(location.hostname)}`;
+	const url=`${endpoint_url}/go/report/features?is_chrome=${is_chrome()?1:0}&pa_on=${pa_on?1:0}&topics_on=${topics_on?1:0}`;//&domain=${encodeURIComponent(location.hostname)}
 	fetch(url);
 	/*const iframe=document.createElement('iframe');
 	iframe.id='lucead-measure-features';
@@ -301,7 +301,7 @@ function sync_cookies(consent)
 {
 	if(storage.get('sync')) return;
 	storage.set('sync',1,86400);
-	const params=`gdpr=${Number(consent.gdprApplies)}&gdpr_consent=${consent.tcString}`
+	const params=`gdpr=${Number(consent?.gdprApplies)}&gdpr_consent=${consent?.tcString}`
 
 	const urls=[
 		`https://hb.360yield.com/prebid-universal-creative/load-cookie.html?pbs=1&${params}`,
