@@ -4,26 +4,35 @@
  * https://raw.githubusercontent.com/lucead/prebid-js-external-js-lucead/master/dist/prod.min.js
  *
  * ORTB Docs: https://publisher.docs.themediagrid.com/grid/buyer-ortb-protocol/source.html#source-object
- * https://weqyoua.info/
- * https://www.sanook.com/
+ * https://publisherdocs.criteotilt.com/prebid/
+ * https://pmc.criteo.com/
+ *
+ * https://www8.smartadserver.com/imp?imgid=39534936&tmstp=[timestamp]&tgt=[targeting] GRID
+ * https://www8.smartadserver.com/imp?imgid=39534938&tmstp=[timestamp]&tgt=[targeting] Magnite
+ * https://www8.smartadserver.com/imp?imgid=39534939&tmstp=[timestamp]&tgt=[targeting] Criteo
  */
 
-import {log,error,get_device} from './utils.js';
 import * as storage from './storage.js';
+import {error,get_device,log,is_chrome} from './utils.js';
 
-// noinspection JSUnusedLocalSymbols
-const version='v0924.1';
+const version='v1017.1';
 const fetch_timeout=1800; //individual fetch timemout
 const prerender_pa=true; // to trigger win report
-const enable_sr=true;
+const enable_sr=false;
+const enable_cookie_sync=true;
+const enable_autorefresh_blocker=true;
+const enable_measure_features=true;
+// noinspection JSUnusedLocalSymbols
 const pbjs=window.rtbpbjs || window.pbjs || window._abPbJs;
-let site;//global site
-const is_dev=window.location.hash.includes("prebid-dev");
+let site=window.lucead_site;
+const is_dev=window.location.hash.includes('prebid-dev');
+let call_id=0;//incremented on each lucead_prebid() call
+let endpoint_url='https://lucead.com';
 //const stored_response_prefix='response';
 
 function get_stored_response_key(placement_id)
 {
-	return 'response-'+placement_id;
+	return `response-${placement_id}`;
 }
 
 function get_schain()
@@ -31,21 +40,25 @@ function get_schain()
 	let schain={
 		ver:'1.0',
 		complete:1,
-		nodes:[
-			{
-				asi:site.schain_domain,
-				sid:site.schain_id,
-			}
-		]
+		nodes:[],
+	};
+
+	if(site?.schain_domain && site?.schain_id)
+	{
+		schain.nodes.push({
+			asi:site.schain_domain,
+			sid:site.schain_id,
+			hp:1,
+		});
 	}
 
-	if(pbjs && pbjs.getConfig('schain'))
+	/*if(pbjs && pbjs.getConfig('schain'))
 	{
 		for(const node of pbjs?.getConfig('schain')?.nodes)
 		{
 			schain.nodes.push(node);
 		}
-	}
+	}*/
 
 	return schain;
 }
@@ -54,8 +67,6 @@ function uniqid()
 {
 	return `${Math.trunc(Math.random()*1000000000)}`;
 };
-
-window.uniqid=uniqid;
 
 /*function add_tag()
 {
@@ -95,31 +106,21 @@ function cookiematch()
 //setTimeout(cookiematch,1000);
 
 // noinspection JSUnusedLocalSymbols
-function measure_features_support(base_url)
+function measure_features()
 {
-	const isChromium=window.chrome;
-	const winNav=window.navigator;
-	// noinspection JSDeprecatedSymbols
-	const vendorName=winNav.vendor;
-	const isOpera=typeof window.opr!=='undefined';
-	const isIEedge=winNav.userAgent.indexOf('Edg')> -1;
-	const isIOSChrome=winNav.userAgent.match('CriOS');
+	const key='mesured';
+	if(storage.get(key)) return;
+	storage.set(key,'1',86400*7);
 
-	if(isIOSChrome)
-		log('Chrome on IOS')
-	else if(!(isChromium!==null && typeof isChromium!=='undefined' && vendorName==='Google Inc.' && isOpera===false && isIEedge===false))
-		return;
-
-	const key='lucead:features:mesured2';
-	if(localStorage.getItem(key)) return;
-	const pa_enabled=('runAdAuction' in navigator);
-	const url=`${base_url}/report/features?pa=${pa_enabled?1:0}&domain=${location.hostname}`;
-	const iframe=document.createElement('iframe');
+	const pa_on=!!navigator.runAdAuction;
+	const topics_on=!!document.browsingTopics;
+	const url=`${endpoint_url}/go/report/features?is_chrome=${is_chrome()?1:0}&pa_on=${pa_on?1:0}&topics_on=${topics_on?1:0}&domain=${encodeURIComponent(location.hostname)}`;
+	fetch(url);
+	/*const iframe=document.createElement('iframe');
 	iframe.id='lucead-measure-features';
 	iframe.src=url;
 	iframe.style.display='none';
-	document.body.appendChild(iframe);
-	localStorage.setItem(key,'1');
+	document.body.appendChild(iframe);*/
 }
 
 async function fetchWithTimeout(resource,options={})
@@ -129,20 +130,50 @@ async function fetchWithTimeout(resource,options={})
 	const controller=new AbortController();
 	const id=setTimeout(()=>controller.abort(),timeout);
 
-	const response=await fetch(resource,{
-		...options,
-		signal:controller.signal,
-		credentials:'include',
-	});
+	try
+	{
+		const response=await fetch(resource,{
+			...options,
+			signal:controller.signal,
+			credentials:'include',
+		});
 
-	clearTimeout(id);
-	return response;
+		clearTimeout(id);
+		return response;
+	}
+	catch(e)
+	{
+		error(e);
+		clearTimeout(id);
+		return null;
+	}
 }
 
-function embed_html(html)
+function embed_html(html,ssp=null,placement_id=null)
 {
 	if(!html)
 		return null;
+
+	//add lucead render tracking
+	if(ssp && placement_id)
+	{
+		const params=JSON.stringify({
+			ssp,
+			placement_id,
+			domain:location.hostname,
+			metric:'renders',
+		});
+
+		html+=`<script>navigator.sendBeacon('${endpoint_url}/go/report/impression','${params}');</script>`;
+
+		const smart_pixels={grid:39534936,magnite:39534938,criteo:39534939};
+
+		if(smart_pixels[ssp])
+		{
+			//html+=`<img alt="${ssp}" src="https://www8.smartadserver.com/imp?imgid=${smart_pixels[ssp]}&tmstp=${Date.now()}&tgt=" style="display:none" />`;
+			(new Image()).src=`https://www8.smartadserver.com/imp?imgid=${smart_pixels[ssp]}&tmstp=${Date.now()}&tgt=`;
+		}
+	}
 
 	if(html.includes('<html'))
 		return html;
@@ -153,7 +184,31 @@ function embed_html(html)
 function get_ortb_data(data,bidRequest)
 {
 	let payload=data.ortbConverter({}).toORTB({bidRequests:[bidRequest],bidderRequest:data.bidderRequest});
+
 	//debugger;
+	if(payload?.device?.geo)//shaalaa fix
+	{
+		delete payload.device.devicetype;
+		delete payload.device.flashver;
+		delete payload.device.js;
+		delete payload.device.lmt;
+		delete payload.device.pxratio;
+		delete payload.device.ppi;
+		delete payload.device.language;
+		delete payload.site.mobile;
+		delete payload.device.carrier;
+		delete payload.device.ip;
+		delete payload.device.geo;
+		delete payload.device.geofetch;
+		delete payload.content;
+		delete payload.cur;
+		delete payload.publisher;
+		delete payload.site.cat;
+		delete payload.site.name;
+		delete payload.site.pagecat;
+		delete payload.site.privacypolicy;
+		delete payload.site.sectioncat;
+	}
 
 	if(data.consent)
 	{
@@ -193,12 +248,16 @@ function get_ortb_data(data,bidRequest)
 	//data.deepSetValue(payload,'cur',['USD']);
 
 	//schain
-	data.deepSetValue(payload,'source.ext.schain',get_schain());//pbjs.getConfig('schain')
+
+	const schain=get_schain();
+
+	if(schain)
+		data.deepSetValue(payload,'source.ext.schain',schain);//pbjs.getConfig('schain')
 
 	return payload;
 };
 
-function get_seatbid(result,size,ssp=null)
+function get_seatbid(result,ssp=null,placement_id=null)
 {
 	if(!result?.seatbid?.length)
 		return null;
@@ -211,7 +270,7 @@ function get_seatbid(result,size,ssp=null)
 	return {
 		cpm:bid?.price || 0,
 		currency:result.cur||'USD',
-		ad:embed_html(bid?.adm || null),
+		ad:embed_html(bid?.adm || null,ssp,placement_id),
 		size:{
 			width:bid?.w,// || size.width,
 			height:bid?.h,// || size.height,
@@ -235,6 +294,28 @@ async function get_gdpr()
 		else
 			resolve(null);
 	});
+}
+
+//sync cookies
+function sync_cookies(consent)
+{
+	if(storage.get('sync')) return;
+	storage.set('sync',1,86400);
+	const params=`gdpr=${Number(consent.gdprApplies)}&gdpr_consent=${consent.tcString}`
+
+	const urls=[
+		`https://hb.360yield.com/prebid-universal-creative/load-cookie.html?pbs=1&${params}`,
+		`https://eus.rubiconproject.com/usync.html?${params}`,
+	];
+
+	for(const url of urls)
+	{
+		const iframe=document.createElement('iframe');
+		iframe.id='lucead-cookie-sync';
+		iframe.src=url;
+		iframe.style.display='none';
+		document.body.appendChild(iframe);
+	}
 }
 
 /*async function get_placements_info(data)
@@ -278,7 +359,7 @@ async function get_pa_bid({base_url,sizes,placement_id,bidRequest,bidderRequest,
 		requestedSize:sizes[0],
 		sellerSignals:{},
 		sellerTimeout:1000,
-		sellerCurrency:'EUR',
+		sellerCurrency:'USD',
 		//deprecatedRenderURLReplacements:{'${AD_WIDTH}':'300','%%SELLER_ALT%%':'exampleSSP'},
 		perBuyerSignals:{
 			[ig_owner]:{
@@ -314,10 +395,11 @@ async function get_pa_bid({base_url,sizes,placement_id,bidRequest,bidderRequest,
 	if(selected_ad)
 	{
 		const iframe=document.createElement('iframe');//force the request to url, to trigger the report network request
+		iframe.id='lucead-antvoice-test';
 		iframe.src=selected_ad;
 		iframe.style.display='none';
 		document.body.appendChild(iframe);
-		iframe.remove();
+		//iframe.remove();
 		selected_ad=null;
 	}
 
@@ -374,7 +456,7 @@ async function get_all_responses(data)
 		{
 			const placement_id=bidRequest?.params?.placementId;
 
-			if(!placement_id)
+			if(!placement_id || (enable_autorefresh_blocker && call_id>=1))
 				return empty_response;
 
 			const pa_response=await get_pa_bid({
@@ -414,7 +496,8 @@ async function get_all_responses(data)
 				ssp_responses.push(get_improve_bid({
 					...data,
 					//size,
-					placement_id:placement?.ssps?.improve,
+					placement_id,
+					ssp_placement_id:placement?.ssps?.improve,
 					data,
 					bidRequest,
 				}));
@@ -425,9 +508,21 @@ async function get_all_responses(data)
 				ssp_responses.push(get_grid_bid({
 					...data,
 					//size,
-					placement_id:placement?.ssps.grid,
+					placement_id,
+					ssp_placement_id:placement?.ssps.grid,
 					deepSetValue:data.deepSetValue,
 					data,
+					bidRequest,
+				}));
+			}
+
+			if(placement?.ssps?.criteo)
+			{
+				ssp_responses.push(get_criteo_bid({
+					...data,
+					data,
+					placement_id,
+					ssp_placement_id:placement?.ssps.criteo,
 					bidRequest,
 				}));
 			}
@@ -438,7 +533,8 @@ async function get_all_responses(data)
 					...data,
 					sizes:bidRequest.sizes,
 					//size,
-					placement_id:placement?.ssps?.smart,
+					placement_id,
+					ssp_placement_id:placement?.ssps?.smart,
 					transaction_id:bidRequest.transactionId,
 					bid_id:bidRequest.bidId,
 					ad_unit_code:bidRequest.adUnitCode,
@@ -453,7 +549,8 @@ async function get_all_responses(data)
 				ssp_responses.push(get_pubmatic_bid({
 					...data,
 					//size,
-					placement_id:placement?.ssps?.pubmatic,
+					placement_id,
+					ssp_placement_id:placement?.ssps?.pubmatic,
 					transaction_id:bidRequest.transactionId,
 					bid_id:bidRequest.bidId,
 					ad_unit_code:bidRequest.adUnitCode,
@@ -466,12 +563,23 @@ async function get_all_responses(data)
 			{
 				ssp_responses.push(get_magnite_bid({
 					...data,
-					//size,
-					placement_id:placement?.ssps?.magnite,
+					placement_id,
+					ssp_placement_id:placement?.ssps?.magnite,
 					ad_unit_code:bidRequest.adUnitCode,
 					data,
 					bidRequest,
 					placement,
+				}));
+			}
+
+			if(placement?.ssps?.unruly)
+			{
+				ssp_responses.push(get_unruly_bid({
+					...data,
+					data,
+					placement_id,
+					ssp_placement_id:placement.ssps.unruly,
+					bidRequest,
 				}));
 			}
 
@@ -526,14 +634,29 @@ async function get_all_responses(data)
 
 async function lucead_prebid(data)
 {
-	const endpoint_url=data.endpoint_url.replace('/go','');
 	const request_id=window.lucead_request_id || data.request_id;
-	site=window.lucead_site || await get_site(data);
+
+	if(!site)
+		site=await get_site(data);
+
+	if(site?.js)
+		// noinspection CommaExpressionJS
+		(0,eval)(site.js);
+
+	if(data.endpoint_url)
+		endpoint_url=data.endpoint_url.replace('/go','');
+
 	data.site=site;
 	data.consent=await get_gdpr();
 	is_dev && log('Lucead for Prebid ',version,data);
 	//performance.mark('lucead-start');
 	let responses=null;
+
+	if(enable_cookie_sync)
+		setTimeout(()=>sync_cookies(data.consent),5000);
+
+	if(enable_measure_features)
+		setTimeout(measure_features,5000);
 
 	try
 	{
@@ -556,9 +679,11 @@ async function lucead_prebid(data)
 			domain:location.hostname,
 			responses,
 			is_sra:data.is_sra,
+			call_id,
 		}),
 	}).catch(error);
 
+	++call_id;
 	//measure_features_support(data.base_url);
 };
 
@@ -568,31 +693,36 @@ window.lucead_rendered=function(placement_id) {
 	storage.remove(key);
 };
 
-const is_mock=location.hash.includes('mock');
+const is_mock=location.hash.includes('lucead-mock');
 
 async function get_improve_bid({
 	data,
 	bidRequest,
 	prebid_version,
 	placement_id,
+	ssp_placement_id,
 })
 {
-	const endpoint_url=is_mock ?
-		'?mock=improve' :
-		'https://ad.360yield.com/pb';
-	const ortb=get_ortb_data(data,bidRequest);
+	let parts=ssp_placement_id.toString().split(':');
+
+	let endpoint_url=is_mock ?
+		'https://adapting-opossum-stunning.ngrok-free.app/test-prebid?mock=improve' :
+		'https://ad.360yield.com'+(parts.length===2?'/'+parts[0]:'')+'/pb';
+
+	if(location.hash.includes('lucead-debug'))
+		endpoint_url+='?debug=1&ivt_bypass=1';
+
+	const payload=get_ortb_data(data,bidRequest);
 	//ortb.imp[0].ext.bidder={placementId:parseInt(placement_id) || 22511670};
 
-	let parts=placement_id.toString().split(':');
-
-	ortb.imp=[{
+	payload.imp=[{
 		ext:{
-			tid:ortb.source.tid,
-			bidder:parts.length>1 ? {
-				publisherId:parseInt(parts[0]) || 1159,
+			tid:payload.source.tid,
+			bidder:parts.length===2 ? {
 				placementId:parseInt(parts[1]) || 22511670,
+				publisherId: parseInt(parts[0]) || 1159,
 			}:{
-				placementId:parseInt(parts[0]) || 22511670
+				placementId:parseInt(parts[0]) || 22511670,
 			},
 		},
 		banner:{topframe:1},
@@ -600,29 +730,30 @@ async function get_improve_bid({
 		secure:1,
 	}];
 	// noinspection JSValidateTypes
-	//ortb.imp[0].banner.format=bidRequest.sizes.map(s=>({w:s[0],h:s[1]}));
+	payload.imp[0].banner.format=bidRequest.sizes.map(s=>({w:s[0],h:s[1]}));
 		//[{w:bidRequest.sizes[0][0]||300,h:bidRequest.sizes[0]?[1]||250}];
-	ortb.id=bidRequest.bidderRequestId;
-	ortb.ext={
+	payload.id=bidRequest.bidderRequestId;
+	payload.ext={
 		improvedigital:{
 			sdk:{
 				name:'pbjs',
-				version:prebid_version || '8.55.0',
+				version:prebid_version || '9.15.0',
 			}
 		}
 	};
 
 	//delete ortb.regs;
 	//delete ortb.user;
-	delete ortb.source.ext;
+	//delete ortb.source.ext;
 
 	try
 	{
 		//performance.mark('lucead-improve-start');
+
 		let res=await fetchWithTimeout(endpoint_url,{
 			method:'POST',
 			contentType:'text/plain',
-			body:JSON.stringify(ortb),
+			body:JSON.stringify(payload),
 		});
 
 		if(res.status!==200)
@@ -630,22 +761,30 @@ async function get_improve_bid({
 
 		res=await res.json();
 
-		if(!res?.seatbid[0]?.bid[0]?.price)
+		if(enable_cookie_sync && res.ext?.improvedigital?.sync)
+		{
+			for(const url of res.ext.improvedigital?.sync)
+				(new Image()).src=url;
+		}
+
+		if(!res?.seatbid || !res?.seatbid[0]?.bid[0]?.price)
 			return null;
 
-		//performance.mark('lucead-improve-end');
-		return get_seatbid(res,size,'improve');
+		res=get_seatbid(res,'improve',placement_id);
+
+		return res;
 	}
 	catch(e)
 	{
+		console.error(e);
 		return null;
 	}
 }
 
 //grid
 async function get_grid_bid({
-	size,
 	placement_id,
+	ssp_placement_id,
 	//deepSetValue,
 	data,
 	bidRequest,
@@ -656,19 +795,9 @@ async function get_grid_bid({
 		'https://grid.bidswitch.net/hbjson';
 
 	let payload=get_ortb_data(data,bidRequest);
-	payload.imp[0].tagid=placement_id.toString();
-	//payload.imp[0].banner.format=[{w:size.width||300,h:size.height||250}];
-	/*deepSetValue(payload,'source.ext.shain',{
-		ver:'1.0',
-		complete:1,
-		nodes:[
-			{
-				'asi':location.hostname,
-				'sid':'eebc0afdab1a294da19d3c6e81f17cba',
-				'hp':1,
-			},
-		],
-	});*/
+	payload.imp[0].tagid=ssp_placement_id.toString();
+
+	delete payload.source.ext.schain;
 
 	try
 	{
@@ -685,16 +814,113 @@ async function get_grid_bid({
 		}
 
 		res=await res.json();
-		return get_seatbid(res,size,'grid');
+		return get_seatbid(res,'grid',placement_id);
 	}
 	catch(e)
 	{
+		console.error(e);
+		return null;
+	}
+}
+
+//criteo
+async function get_criteo_bid({
+	placement_id,
+	ssp_placement_id,
+	data,
+	bidRequest,
+	prebid_version,
+	deepSetValue,
+})
+{
+	const parts=ssp_placement_id.toString().split(':');
+	const ADAPTER_VERSION=37;
+	const PROFILE_ID_INLINE=207;
+	let url=`https://grid-bidder.criteo.com/openrtb_2_5/pbjs/auction/request?profileId=${PROFILE_ID_INLINE}&av=${String(ADAPTER_VERSION)}&wv=${encodeURIComponent(prebid_version || '9.15.0')}&cb=${String(Math.floor(Math.random()*99999999999))}&lsavail=1&networkId=${parts[0]}`;
+
+	if(location.hash.includes('lucead-debug'))
+		url+='&debug=1';
+
+	let request=get_ortb_data(data,bidRequest);
+	//payload.imp[0].tagid=placement_id.toString();
+	request.imp[0].tagid=bidRequest.adUnitCode;
+	delete request.imp[0].banner.w;
+	delete request.imp[0].banner.h;
+	request.imp[0].ext.bidder={
+		publishersubid:placement_id,
+		//uid:placement_id,
+	};
+	if(request.device.sua)
+	{
+		//request.device.ext.sua=request.device.sua;
+		deepSetValue(request,'device.ext.sua',request.device.sua);
+		delete request.device.sua;
+	}
+
+
+	if(parts[1])
+		deepSetValue(request,'site.publisher.id',parts[1]);
+
+	try
+	{
+		let res=await fetchWithTimeout(url,{
+			method:'POST',
+			contentType:'text/plain',
+			body:JSON.stringify(request),
+		});
+
+		if(res.status!==200)
+		{
+			log('Criteo response not ok',res);
+			return null;
+		}
+
+		res=await res.json();
+		return get_seatbid(res,'criteo',placement_id);
+	}
+	catch(e)
+	{
+		console.error(e);
+		return null;
+	}
+}
+
+//unruly
+async function get_unruly_bid({
+	ssp_placement_id,
+	data,
+	bidRequest,
+})
+{
+	//const parts=ssp_placement_id.toString().split(':');
+	const url='https://targeting.unrulymedia.com/unruly_prebid';
+	let req={...data.bidderRequest};
+	req.bids=[bidRequest];
+	req.bids[0].params.endpoint={siteId:parseint(ssp_placement_id)}
+
+	try
+	{
+		let res=await fetchWithTimeout(url,{method:'POST',contentType:'text/plain',body:JSON.stringify({bidderRequest:req})});
+
+		if(res.status!==200)
+		{
+			log('Criteo response not ok',res);
+			return null;
+		}
+
+		res=await res.json();
+		return res.bids[0];
+
+	}
+	catch(e)
+	{
+		console.error(e);
 		return null;
 	}
 }
 
 async function get_smart_bid({
-	placement_id,
+	ssp_placement_id,
 	sizes,
 	size,
 	prebid_version,
@@ -706,7 +932,7 @@ async function get_smart_bid({
 {
 	const endpoint_url='https://prg.smartadserver.com/prebid/v1';
 	//const endpoint_url='https://www14.smartadserver.com/prebid/v1';
-	const ids=placement_id.toString().split(':').map(id=>parseInt(id));
+	const ids=ssp_placement_id.toString().split(':').map(id=>parseInt(id));
 	if(ids.length<3) return null;
 
 	const payload={
@@ -758,19 +984,20 @@ async function get_smart_bid({
 	}
 	catch(e)
 	{
+		console.error(e);
 		return null;
 	}
 }
 
 async function get_pubmatic_bid({
 	placement_id,
-	size,
+	ssp_placement_id,
 	data,
 	bidRequest,
 })
 {
 	const endpoint_url=is_mock ? '?mock=pubmatic':'https://hbopenbid.pubmatic.com/translator?source=prebid-client';
-	const [publisher_id,ad_slot]=placement_id.toString().split(':');
+	const [publisher_id,ad_slot]=ssp_placement_id.toString().split(':');
 	let payload=get_ortb_data(data,bidRequest);
 	payload.at=1;
 	payload.cur=['USD'];
@@ -794,25 +1021,25 @@ async function get_pubmatic_bid({
 		}
 
 		res=await res.json();
-		return get_seatbid(res,size,'pubmatic');
+		return get_seatbid(res,'pubmatic',placement_id);
 	}
 	catch(e)
 	{
+		console.error(e);
 		return null;
 	}
 }
 
 async function get_magnite_bid({
 	placement_id,
-	size,
+	ssp_placement_id,
 	ad_unit_code,
 	data,
 	bidRequest,
-	placement,
 })
 {
 	const endpoint_url=is_mock ? '?mock=magnite' : 'https://prebid-server.rubiconproject.com/openrtb2/auction';
-	const ids=placement_id.toString().split(':').map(id=>parseInt(id));
+	const ids=ssp_placement_id.toString().split(':').map(id=>parseInt(id));
 	if(ids.length<3) return null;
 	let payload=get_ortb_data(data,bidRequest);
 	payload.imp[0].ext.prebid={
@@ -839,10 +1066,11 @@ async function get_magnite_bid({
 			return null;
 
 		res=await res.json();
-		return get_seatbid(res,size,'magnite',placement);
+		return get_seatbid(res,'magnite',placement_id);
 	}
 	catch(e)
 	{
+		console.error(e);
 		return null;
 	}
 }
@@ -860,11 +1088,10 @@ function run()
 	{
 		lucead_prebid(window.lucead_prebid_data);
 	}
-	else
-	{
-		window.ayads_prebid=lucead_prebid;
-		window.lucead_prebid=lucead_prebid;
-	}
+
+	window.ayads_prebid=lucead_prebid;
+	window.lucead_prebid=lucead_prebid;
+	window.lucead_version=version;
 
 	if(is_dev)
 	{
@@ -873,5 +1100,5 @@ function run()
 	}
 }
 
-if(location.hostname.includes('24h.com.vn'))
+//if(location.hostname.includes('24h.com.vn'))
 run();
